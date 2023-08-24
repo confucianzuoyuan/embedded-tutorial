@@ -8,6 +8,7 @@
 - Clion：JetBrains 公司提供的 C\C++ IDE。[下载链接](https://www.jetbrains.com/clion/)
 - openocd：开源的单片机程序烧写工具。[下载链接](https://gnutoolchains.com/arm-eabi/openocd/)。下载完解压之后，注意将 `bin` 文件夹的绝对路径添加到环境变量中。打开 PowerShell ，然后输入 `openocd -v` 确认安装成功。
 - gcc-arm-none-eabi：开源的 ARM 指令集编译器。[下载链接](https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-win32.exe?rev=29bb46cfa0434fbda93abb33c1d480e6&hash=B2C5AAE07841929A0D0BF460896D6E52)。安装完之后，找到安装路径。然后将 `bin` 文件夹的绝对路径添加到环境变量中。打开 PowerShell ，然后输入 `arm-none-eabi-gcc.exe -v` 确认安装成功。
+- Anaconda：Python集成工具包。用来编写 PC 端的上位机程序。[下载链接](https://www.anaconda.com/download)
 
 ## 使用 STM32CubeMX 创建 STM32F103 项目
 
@@ -59,6 +60,13 @@ adapter speed 12000
 
 ![](images/clion-3.png)
 
-此时会弹出选择 openocd 配置文件的面板，选择 `stm32f1discovery` 。
+此时会弹出选择 openocd 配置文件的面板，选择 `stm32f1discovery.cfg` 。
 
-然后就可以愉快的写代码了。
+然后就可以愉快的写代码了。点击运行看一下样板代码是否可以烧写成功。
+
+## 心电监测仪项目架构图
+
+### 硬件架构图
+
+![](images/硬件架构图.png)
+
