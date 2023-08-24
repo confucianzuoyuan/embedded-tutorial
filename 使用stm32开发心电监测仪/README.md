@@ -11,3 +11,6 @@
 
 ## 使用 STM32CubeMX 创建 STM32F103 项目
 
+1. 打开 STM32CubeMX 并创建项目
+
+![](images/STM32CubeMX开始界面.png)
