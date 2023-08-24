@@ -11,6 +11,54 @@
 
 ## 使用 STM32CubeMX 创建 STM32F103 项目
 
-1. 打开 STM32CubeMX 并创建项目
+1. 打开 STM32CubeMX
 
 ![](images/STM32CubeMX开始界面.png)
+
+2. 选择要使用的芯片
+
+![](images/cubemx-2.png)
+
+3. 创建项目
+
+![](images/cubemx-3.png)
+
+然后输入项目名称，并创建项目
+
+![](images/cubemx-4.png)
+
+4. 关闭 STM32CubeMX
+
+![](images/cubemx-5.png)
+
+## 编写烧写工具配置文件
+
+我们使用的仿真器是 `cmsis-dap` 协议的仿真器。
+
+在路径 `解压openocd的绝对路径\openocd-20230712\OpenOCD-20230712-0.12.0\share\openocd\scripts\board` 文件夹中新建文件 `stm32f1discovery.cfg` 文件，在里面写入以下内容：
+
+```cfg
+source [find interface/cmsis-dap.cfg]
+
+transport select swd
+
+# 待烧写单片机是 stm32f1x 型号
+source [find target/stm32f1x.cfg]
+
+# 设置调试器,最大速度为24MHz
+adapter speed 12000
+```
+
+## 使用 Clion 打开 STM32CubeMX 创建的项目
+
+使用 Clion 打开创建的项目中的 `.ioc` 文件，注意要 **作为项目打开** 。
+
+![](images/clion-1.png)
+
+![](images/clion-2.png)
+
+![](images/clion-3.png)
+
+此时会弹出选择 openocd 配置文件的面板，选择 `stm32f1discovery` 。
+
+然后就可以愉快的写代码了。
