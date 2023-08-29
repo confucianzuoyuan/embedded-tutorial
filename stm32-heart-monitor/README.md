@@ -4,7 +4,7 @@ author: '尚硅谷研究院'
 date: '版本: V1.0'
 ...
 
-# 项目需求即技术选型
+# 项目需求和技术选型
 
 ## 硬件选型
 
@@ -45,7 +45,7 @@ date: '版本: V1.0'
 - gcc-arm-none-eabi：开源的 ARM 指令集编译器。[下载链接](https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-win32.exe?rev=29bb46cfa0434fbda93abb33c1d480e6&hash=B2C5AAE07841929A0D0BF460896D6E52)。安装完之后，找到安装路径。然后将 `bin` 文件夹的绝对路径添加到环境变量中。打开 PowerShell ，然后输入 `arm-none-eabi-gcc.exe -v` 确认安装成功。
 - Anaconda：Python集成工具包。用来编写 PC 端的上位机程序。[下载链接](https://www.anaconda.com/download)
 
-# 使用 STM32CubeMX 创建 STM32F103 项目
+## 使用 STM32CubeMX 创建 STM32F103 项目
 
 1. 打开 STM32CubeMX
 
@@ -105,7 +105,7 @@ date: '版本: V1.0'
 
 ![](images/cubemx-5.png)
 
-# 编写烧写工具配置文件
+## 编写烧写工具配置文件
 
 我们使用的仿真器是 `cmsis-dap` 协议的仿真器。
 
@@ -123,7 +123,7 @@ source [find target/stm32f1x.cfg]
 adapter speed 12000
 ```
 
-# 使用 Clion 打开 STM32CubeMX 创建的项目
+## 使用 Clion 打开 STM32CubeMX 创建的项目
 
 使用 Clion 打开创建的项目中的 `.ioc` 文件，注意要 **作为项目打开** 。
 
