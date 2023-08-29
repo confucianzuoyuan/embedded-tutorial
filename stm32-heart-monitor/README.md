@@ -926,3 +926,604 @@ python main.py
 ```
 
 就可以运行上位机程序了。
+
+# 程序优化：将 ADC 采集的数据通过 DMA 的方式写入内存
+
+下位机代码只需要很少的改动就可以添加 DMA 的功能。
+
+`stm32f1xx_it.c` 文件如下：
+
+```c
+#include "main.h"
+#include "stm32f1xx_it.h"
+
+/* External variables --------------------------------------------------------*/
+extern DMA_HandleTypeDef hdma_adc1;
+
+/******************************************************************************/
+/*           Cortex-M3 Processor Interruption and Exception Handlers          */
+/******************************************************************************/
+/**
+  * @brief This function handles Non maskable interrupt.
+  */
+void NMI_Handler(void) {
+}
+
+/**
+  * @brief This function handles Hard fault interrupt.
+  */
+void HardFault_Handler(void) {
+    while (1) {
+    }
+}
+
+/**
+  * @brief This function handles Memory management fault.
+  */
+void MemManage_Handler(void) {
+    while (1) {
+    }
+}
+
+/**
+  * @brief This function handles Prefetch fault, memory access fault.
+  */
+void BusFault_Handler(void) {
+    while (1) {
+    }
+}
+
+/**
+  * @brief This function handles Undefined instruction or illegal state.
+  */
+void UsageFault_Handler(void) {
+    while (1) {
+    }
+}
+
+/**
+  * @brief This function handles System service call via SWI instruction.
+  */
+void SVC_Handler(void) {
+}
+
+/**
+  * @brief This function handles Debug monitor.
+  */
+void DebugMon_Handler(void) {
+}
+
+/**
+  * @brief This function handles Pendable request for system service.
+  */
+void PendSV_Handler(void) {
+}
+
+/******************************************************************************/
+/* STM32F1xx Peripheral Interrupt Handlers                                    */
+/* Add here the Interrupt Handlers for the used peripherals.                  */
+/* For the available peripheral interrupt handler names,                      */
+/* please refer to the startup file (startup_stm32f1xx.s).                    */
+/******************************************************************************/
+
+/**
+  * @brief This function handles DMA1 channel1 global interrupt.
+  */
+void DMA1_Channel1_IRQHandler(void) {
+    HAL_DMA_IRQHandler(&hdma_adc1);
+}
+```
+
+`stm32f1xx_hal_msp.c` 如下：
+
+```c
+#include "main.h"
+
+extern DMA_HandleTypeDef hdma_adc1;
+
+void HAL_MspInit(void) {
+    __HAL_RCC_AFIO_CLK_ENABLE();
+    __HAL_RCC_PWR_CLK_ENABLE();
+}
+
+/**
+* @brief ADC MSP Initialization
+* This function configures the hardware resources used in this example
+* @param hadc: ADC handle pointer
+* @retval None
+*/
+void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    if (hadc->Instance == ADC1) {
+        /* Peripheral clock enable */
+        __HAL_RCC_ADC1_CLK_ENABLE();
+
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        /**ADC1 GPIO Configuration
+        PA0-WKUP     ------> ADC1_IN0
+        */
+        GPIO_InitStruct.Pin = GPIO_PIN_0;
+        GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        /* ADC1 DMA Init */
+        /* ADC1 Init */
+        hdma_adc1.Instance = DMA1_Channel1;
+        hdma_adc1.Init.Direction = DMA_PERIPH_TO_MEMORY;
+        hdma_adc1.Init.PeriphInc = DMA_PINC_DISABLE;
+        hdma_adc1.Init.MemInc = DMA_MINC_ENABLE;
+        hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+        hdma_adc1.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+        hdma_adc1.Init.Mode = DMA_CIRCULAR;
+        hdma_adc1.Init.Priority = DMA_PRIORITY_LOW;
+        if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) {
+            Error_Handler();
+        }
+
+        __HAL_LINKDMA(hadc, DMA_Handle, hdma_adc1);
+    }
+
+}
+
+/**
+* @brief ADC MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param hadc: ADC handle pointer
+* @retval None
+*/
+void HAL_ADC_MspDeInit(ADC_HandleTypeDef *hadc) {
+    if (hadc->Instance == ADC1) {
+        /* Peripheral clock disable */
+        __HAL_RCC_ADC1_CLK_DISABLE();
+
+        /**ADC1 GPIO Configuration
+        PA0-WKUP     ------> ADC1_IN0
+        */
+        HAL_GPIO_DeInit(GPIOA, GPIO_PIN_0);
+
+        /* ADC1 DMA DeInit */
+        HAL_DMA_DeInit(hadc->DMA_Handle);
+    }
+}
+
+/**
+* @brief TIM_Base MSP Initialization
+* This function configures the hardware resources used in this example
+* @param htim_base: TIM_Base handle pointer
+* @retval None
+*/
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htim_base) {
+    if (htim_base->Instance == TIM1) {
+        __HAL_RCC_TIM1_CLK_ENABLE();
+        HAL_NVIC_SetPriority(TIM1_UP_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(TIM1_UP_IRQn);
+    }
+
+}
+
+/**
+* @brief TIM_Base MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param htim_base: TIM_Base handle pointer
+* @retval None
+*/
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef *htim_base) {
+    if (htim_base->Instance == TIM1) {
+        __HAL_RCC_TIM1_CLK_DISABLE();
+        HAL_NVIC_DisableIRQ(TIM1_UP_IRQn);
+    }
+
+}
+
+/**
+* @brief UART MSP Initialization
+* This function configures the hardware resources used in this example
+* @param huart: UART handle pointer
+* @retval None
+*/
+void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    if (huart->Instance == USART2) {
+        __HAL_RCC_USART2_CLK_ENABLE();
+
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        /**USART2 GPIO Configuration
+        PA2     ------> USART2_TX
+        PA3     ------> USART2_RX
+        */
+        GPIO_InitStruct.Pin = GPIO_PIN_2;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        GPIO_InitStruct.Pin = GPIO_PIN_3;
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(USART2_IRQn);
+    }
+
+}
+
+/**
+* @brief UART MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param huart: UART handle pointer
+* @retval None
+*/
+void HAL_UART_MspDeInit(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART2) {
+        /* Peripheral clock disable */
+        __HAL_RCC_USART2_CLK_DISABLE();
+
+        /**USART2 GPIO Configuration
+        PA2     ------> USART2_TX
+        PA3     ------> USART2_RX
+        */
+        HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2 | GPIO_PIN_3);
+        HAL_NVIC_DisableIRQ(USART1_IRQn);
+    }
+
+}
+```
+
+`main.c` 如下：
+
+```c
+#include "main.h"
+#include "stdio.h"
+#include "string.h"
+#include "stdlib.h"
+
+uint32_t dma_buffer[1];
+
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+TIM_HandleTypeDef htim1;
+UART_HandleTypeDef huart2;
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+
+static void MX_GPIO_Init(void);
+
+static void MX_DMA_Init(void);
+
+static void MX_ADC1_Init(void);
+
+static void MX_TIM1_Init(void);
+
+static void MX_USART2_UART_Init(void);
+
+uint32_t sample;
+char TxBuffer[8];
+char param_s[7];
+int param;
+char RxBuffer[8];
+int RxIndex = 0;
+char c;
+
+// systick
+int ticks = 0;
+int isSending = 0;
+int duration = 0;
+int takeSample = 0;
+int dmaDone = 0;
+int command_flag = 0;
+
+void configureSamplingRate(int sampling_rate) {
+    //	(2^23/sampling rate)/2^16 = 2^7/sampling rate +1 in case integer division rounds down
+    volatile int prescaler = 128 / sampling_rate + 1;
+    //	#clocks / prescaler = (2^23/sampling rate) / prescaler
+    volatile int load = 8388608 / (sampling_rate * prescaler);
+    __HAL_TIM_SET_PRESCALER(&htim1, prescaler);
+    __HAL_TIM_SET_AUTORELOAD(&htim1, load);
+}
+
+void TIM1_UP_IRQHandler() {
+    HAL_TIM_IRQHandler(&htim1);
+    if (!isSending)
+        return;
+    else if (ticks > 1000 * duration) {
+        ticks = 0;
+        isSending = 0;
+    }
+    takeSample = 1; // SET flag to true
+}
+
+void SysTick_Handler(void) {
+    HAL_IncTick();
+    if (isSending)
+        ticks++;
+}
+
+void USART2_IRQHandler(void) {
+    HAL_UART_IRQHandler(&huart2);
+    int result = HAL_UART_Receive(&huart2, (uint8_t *) &c, 1, 500);
+    if (result == HAL_OK) {
+        if (c != 0x0A) { // newline
+            RxBuffer[RxIndex++] = c;
+        } else {
+            command_flag = 1;
+        }
+    }
+}
+
+void process_command() {
+    __HAL_UART_DISABLE_IT(&huart2, UART_IT_RXNE);
+    strcpy(param_s, RxBuffer + 1);
+    param = atoi(param_s);
+    char command = RxBuffer[0];
+    __HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
+    switch (command) {
+        case 's':
+            configureSamplingRate(param);
+            break;
+        case 'c':
+            isSending = 1;
+            duration = param;
+        default:
+            break;
+    }
+    memset(RxBuffer, 0, 8);
+    RxIndex = 0;
+}
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void) {
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
+
+    SystemClock_Config();
+
+    HAL_SYSTICK_Config(8192);
+
+    /* Initialize all configured peripherals */
+    MX_GPIO_Init();
+    MX_DMA_Init();
+    MX_ADC1_Init();
+    MX_TIM1_Init();
+    MX_USART2_UART_Init();
+    /* USER CODE BEGIN 2 */
+
+    HAL_TIM_Base_Start_IT(&htim1);
+    configureSamplingRate(100);
+    HAL_ADC_Start(&hadc1);
+
+    __HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE);
+
+    //HAL_ADC_Start_DMA(&hadc1, dma_buffer, 1);
+
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
+    while (1) {
+        if (takeSample) {
+            HAL_TIM_Base_Stop_IT(&htim1);
+            takeSample = 0;
+            HAL_ADC_Start_DMA(&hadc1, dma_buffer, 1);
+            HAL_TIM_Base_Start_IT(&htim1);
+        }
+        if (dmaDone) {
+            sprintf(TxBuffer, "%04lu\n", (unsigned long) dma_buffer[0]);
+            HAL_UART_Transmit(&huart2, (uint8_t *) TxBuffer, sizeof(TxBuffer), HAL_MAX_DELAY);
+            dmaDone = 0;
+        }
+        if (command_flag) {
+            process_command();
+            command_flag = 0;
+        }
+        if (!isSending) {
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, 1); // turn off
+            HAL_TIM_Base_Stop(&htim1);
+            HAL_ADC_Stop(&hadc1);
+            HAL_SuspendTick();
+            HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+            HAL_ResumeTick();
+            SystemClock_Config();
+            HAL_TIM_Base_Start(&htim1);
+            HAL_ADC_Start(&hadc1);
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, 0); // turn on
+        }
+        /* USER CODE BEGIN 3 */
+    }
+    /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void) {
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
+    /** Initializes the RCC Oscillators according to the specified parameters
+    * in the RCC_OscInitTypeDef structure.
+    */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+        Error_Handler();
+    }
+
+    /** Initializes the CPU, AHB and APB buses clocks
+    */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+                                  | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
+        Error_Handler();
+    }
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+    PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void) {
+    ADC_ChannelConfTypeDef sConfig = {0};
+
+    /** Common config
+    */
+    hadc1.Instance = ADC1;
+    hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+    hadc1.Init.ContinuousConvMode = DISABLE;
+    hadc1.Init.DiscontinuousConvMode = DISABLE;
+    hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+    hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    hadc1.Init.NbrOfConversion = 1;
+    if (HAL_ADC_Init(&hadc1) != HAL_OK) {
+        Error_Handler();
+    }
+
+    /** Configure Regular Channel
+    */
+    sConfig.Channel = ADC_CHANNEL_0;
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void) {
+    TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 0;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 100;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_Base_Init(&htim1) != HAL_OK) {
+        Error_Handler();
+    }
+    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+    if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK) {
+        Error_Handler();
+    }
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void) {
+    huart2.Instance = USART2;
+    huart2.Init.BaudRate = 250000;
+    huart2.Init.WordLength = UART_WORDLENGTH_8B;
+    huart2.Init.StopBits = UART_STOPBITS_1;
+    huart2.Init.Parity = UART_PARITY_NONE;
+    huart2.Init.Mode = UART_MODE_TX_RX;
+    huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+    if (HAL_UART_Init(&huart2) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) {
+    /* DMA controller clock enable */
+    __HAL_RCC_DMA1_CLK_ENABLE();
+
+    /* DMA interrupt init */
+    /* DMA1_Channel1_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+
+    /*Configure GPIO pins : PB0 PB1 */
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : PB12 */
+    GPIO_InitStruct.Pin = GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+    dmaDone = 1;
+}
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void) {
+    /* USER CODE BEGIN Error_Handler_Debug */
+    /* User can add his own implementation to report the HAL error return state */
+    __disable_irq();
+    while (1) {
+    }
+    /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */
+```
