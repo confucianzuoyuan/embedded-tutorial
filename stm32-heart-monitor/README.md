@@ -129,8 +129,6 @@ adapter speed 12000
 
 ![](images/clion-1.png)
 
-![](images/clion-2.png)
-
 ![](images/clion-3.png)
 
 此时会弹出选择 openocd 配置文件的面板，选择 `stm32f1discovery.cfg` 。
