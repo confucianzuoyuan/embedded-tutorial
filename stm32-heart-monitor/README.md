@@ -1527,3 +1527,50 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 ```
+
+# 将心电数据采集到上位机以后，进行滤波
+
+由于人的心跳频率范围在 50Hz ~ 200Hz 之间，而单导联采集的信号包含了 50Hz 的工频噪声，所以可以在上位机将噪声滤除。
+
+我们使用 50Hz ~ 200Hz 的带通滤波器来对信号进行滤波。Python 代码如下：
+
+```py
+import numpy as np
+import matplotlib.pyplot as plt
+
+data_list = []
+
+with open("data.txt", "r") as f:
+    for line in f.readlines():
+        data_list.append(float(line))
+
+y = np.array(data_list)
+
+x = np.linspace(0, 1000, 1000)
+
+plt.plot(x,y[:1000])
+
+from scipy.signal import butter, filtfilt
+
+# 信号采样率和截止频率
+sampling_rate = 2000
+cutoff_freq = 50
+
+# 设计高通滤波器
+nyquist_freq = sampling_rate / 2
+normalized_cutoff_freq = cutoff_freq / nyquist_freq
+b, a = butter(4, [0.05, 0.2], btype='bandpass', analog=False)
+
+# 应用滤波器
+filtered_signal = filtfilt(b, a, y[:1000])
+
+plt.plot(x, filtered_signal)
+```
+
+滤波前的信号图：
+
+![](images/before-filter.png)
+
+滤波后的信号图：
+
+![](images/after-filter.png)
