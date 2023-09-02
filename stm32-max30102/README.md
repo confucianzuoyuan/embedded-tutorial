@@ -68,3 +68,4 @@ date: '版本: V1.0'
 
 下位机
 
+![](images/photo.png)
