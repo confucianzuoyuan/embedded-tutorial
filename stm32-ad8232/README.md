@@ -32,7 +32,7 @@ date: '版本: V1.0'
 
 2. AD8232 心电传感器模块
 
-![](images/ad8232.jpeg)
+![](images/ad8232.png)
 
 # 项目实现功能
 
@@ -63,3 +63,7 @@ date: '版本: V1.0'
 下位机
 
 ![](images/photo.png)
+
+样机
+
+![](images/demo.jpg)
