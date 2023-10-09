@@ -1,6 +1,6 @@
 from docx import Document
 
-document = Document("血氧监测仪教程.docx")
+document = Document("output.docx")
 
 for style in document.styles:
     print(style)
@@ -17,4 +17,4 @@ for p in document.paragraphs:
     if p.style.name == 'Heading 3':
         p.style = document.styles['三级标题']
 
-document.save("血氧监测仪教程.docx")
+document.save("output.docx")
