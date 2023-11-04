@@ -29,6 +29,8 @@ date: '版本: V1.0'
 
 ![](images/硬件架构图.png)
 
+![](images/image.png)
+
 ## 软件架构图
 
 ![](images/monitor-1.png)
