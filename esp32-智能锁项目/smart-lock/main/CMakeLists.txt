@@ -1,0 +1,15 @@
+idf_component_register(
+    SRCS
+        "smart-lock.c"
+        "drivers/keyboard_driver.c"
+        "drivers/led_driver.c"
+        "drivers/bluetooth_driver.c"
+        "drivers/wifi_driver.c"
+        "drivers/fingerprint_driver.c"
+        "drivers/tcp_driver.c"
+        "drivers/motor_driver.c"
+        "drivers/audio_driver.c"
+    INCLUDE_DIRS
+        "."
+        "./drivers"
+)
