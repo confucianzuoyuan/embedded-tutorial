@@ -118,13 +118,13 @@ $$
 
 > 注意：频率越高，电磁波越容易被大气、水吸收，也越容易被建筑物遮挡，所以传播距离短。
 
-### 4.2.1 模拟调制
+#### 4.2.1 模拟调制
 
 ![](./Amfm3-en-de.gif)
 
 动图中显示了调频（FM）和调幅（AM）的原理。
 
-### 4.2.2 数字调制
+#### 4.2.2 数字调制
 
 数字调制的目的是如何使用电磁波将0101这样的二进制数发送出去。
 
@@ -133,3 +133,27 @@ $$
 ![](./Fsk.svg.png)
 
 从上到下分别为信号，载波，调制以后的信号。
+
+## 第 5 章 项目实现
+
+### 5.1 硬件接线
+
+主人的定位信息接收器使用尚硅谷核心板和扩展板。
+
+宠物定位器的开发板使用的是STM32F103C8T6，需要使用CubeMX开启：串口1（USART1，调试串口）和串口2（USART2，连接4G-GPS模块），以及SPI1（连接LoRa模块）。还有一些GPIO引脚如下：
+
+```c
+#define LoRa_CS_Pin GPIO_PIN_4
+#define LoRa_CS_GPIO_Port GPIOA
+#define LoRa_RST_Pin GPIO_PIN_0
+#define LoRa_RST_GPIO_Port GPIOB
+#define LoRa_BUSY_Pin GPIO_PIN_1
+#define LoRa_BUSY_GPIO_Port GPIOB
+#define LoRa_TxEN_Pin GPIO_PIN_2
+#define LoRa_TxEN_GPIO_Port GPIOB
+#define LoRa_RxEN_Pin GPIO_PIN_12
+#define LoRa_RxEN_GPIO_Port GPIOB
+```
+
+除了引脚改变了，引脚的配置和之前LoRa教学中的一致。
+
