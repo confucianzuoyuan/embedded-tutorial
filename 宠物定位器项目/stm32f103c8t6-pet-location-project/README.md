@@ -175,7 +175,7 @@ int main(void) {
     设置SOCKET相关参数(); // ip地址，端口号，通信协议为TCP协议
     禁用SOCKET的SSL功能();
 
-    保存4G-GPS模块配置并重新启动();
+    保存4G_GPS模块配置并重新启动();
 
     while (1) {
         获取GPS定位信息();
