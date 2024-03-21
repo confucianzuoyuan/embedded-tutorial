@@ -212,3 +212,36 @@ Done
 使用 #highlight[串口助手] 监视输出和调试。
 
 #warning[当要进行烧写时，请关闭串口助手！]
+
+= 基本GPIO操作
+
+== GPIO配置
+
+普通配置
+
+```c
+gpio_config_t io_conf;
+// 禁用中断
+io_conf.intr_type = GPIO_INTR_DISABLE;
+// 设置GPIO为输出模式
+io_conf.mode = GPIO_MODE_OUTPUT;
+// 设置GPIO PIN脚
+io_conf.pin_bit_mask = ((1ULL << GPIO_NUM_1) | (1ULL << GPIO_NUM_2));
+// 禁用下拉模式
+io_conf.pull_down_en = 0;
+// 开启上拉模式
+io_conf.pull_up_en = 1;
+// 使用以上配置来配置GPIO
+gpio_config(&io_conf);
+```
+
+有关中断的配置方法
+
+```c
+// 上升沿触发中断
+io_conf.intr_type = GPIO_INTR_POSEDGE;
+// 设置为输入模式
+io_conf.mode = GPIO_MODE_INPUT;
+io_conf.pin_bit_mask = (1ULL << GPIO_NUM_0);
+gpio_config(&io_conf);
+```
