@@ -245,3 +245,17 @@ io_conf.mode = GPIO_MODE_INPUT;
 io_conf.pin_bit_mask = (1ULL << GPIO_NUM_0);
 gpio_config(&io_conf);
 ```
+
+操作GPIO的API
+
+```c
+// 将GPIO口设置为输入模式
+gpio_set_direction(GPIO_NUM_2, GPIO_MODE_INPUT);
+// 设置输出模式
+gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
+// 输出高低电平
+gpio_set_level(GPIO_NUM_1, 1);
+gpio_set_level(GPIO_NUM_1, 0);
+// 获取GPIO的电平
+gpio_get_level(GPIO_NUM_2);
+```
