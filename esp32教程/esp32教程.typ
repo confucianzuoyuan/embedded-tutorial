@@ -259,3 +259,363 @@ gpio_set_level(GPIO_NUM_1, 0);
 // 获取GPIO的电平
 gpio_get_level(GPIO_NUM_2);
 ```
+
+有了这些API，我们可以实现 IIC 协议了。
+
+为了方便操作，我们先来定义一组宏定义以及声明头文件。
+
+先在 `main` 文件夹中创建 `drivers` 文件夹，然后创建文件 `keyboard_driver.h` 。文件内容如下：
+
+```c
+#ifndef __KEYBOARD_DRIVER_H_
+#define __KEYBOARD_DRIVER_H_
+
+#include <inttypes.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+
+#define SC12B_SCL GPIO_NUM_1
+#define SC12B_SDA GPIO_NUM_2
+#define SC12B_INT GPIO_NUM_0
+
+#define I2C_SDA_IN gpio_set_direction(SC12B_SDA, GPIO_MODE_INPUT)
+#define I2C_SDA_OUT gpio_set_direction(SC12B_SDA, GPIO_MODE_OUTPUT)
+
+#define I2C_SCL_H gpio_set_level(SC12B_SCL, 1)
+#define I2C_SCL_L gpio_set_level(SC12B_SCL, 0)
+
+#define I2C_SDA_H gpio_set_level(SC12B_SDA, 1)
+#define I2C_SDA_L gpio_set_level(SC12B_SDA, 0)
+
+#define I2C_READ_SDA gpio_get_level(SC12B_SDA)
+
+void Delay_ms(uint8_t time);
+void I2C_Start(void);
+void I2C_Stop(void);
+void I2C_Ack(uint8_t x);
+uint8_t I2C_Wait_Ack(void);
+void I2C_Send_Byte(uint8_t d);
+uint8_t I2C_Read_Byte(uint8_t ack);
+uint8_t SendByteAndGetNACK(uint8_t data);
+uint8_t I2C_Read_Key(void);
+uint8_t KEYBOARD_read_key(void);
+void KEYBORAD_init(void);
+
+#endif
+```
+
+在 `drivers` 文件夹中创建 `keyboard_driver.c` 文件。内容如下：
+
+```c
+#include "keyboard_driver.h"
+
+/// 延时函数，使用 FreeRTOS 的 API 进行包装
+void Delay_ms(uint8_t time)
+{
+    vTaskDelay(time / portTICK_PERIOD_MS);
+}
+
+/// 产生起始信号
+void I2C_Start(void)
+{
+    I2C_SDA_OUT; // sda线输出
+    I2C_SDA_H;
+    I2C_SCL_H;
+    Delay_ms(1);
+    I2C_SDA_L; // START:when CLK is high,DATA change form high to low
+    Delay_ms(1);
+    I2C_SCL_L; // 钳住I2C总线，准备发送或接收数据
+    Delay_ms(1);
+}
+
+/// 产生停止信号
+void I2C_Stop(void)
+{
+    I2C_SCL_L;
+    I2C_SDA_OUT; // sda线输出
+    I2C_SDA_L;   // STOP:when CLK is high DATA change form low to high
+    Delay_ms(1);
+    I2C_SCL_H;
+    Delay_ms(1);
+    I2C_SDA_H; // 发送I2C总线结束信号
+}
+
+/// 下发应答
+void I2C_Ack(uint8_t x)
+{
+    I2C_SCL_L;
+    I2C_SDA_OUT;
+    if (x)
+    {
+        I2C_SDA_H;
+    }
+    else
+    {
+        I2C_SDA_L;
+    }
+    Delay_ms(1);
+    I2C_SCL_H;
+    Delay_ms(1);
+    I2C_SCL_L;
+}
+
+/// 等待应答信号到来，成功返回 0 。
+uint8_t I2C_Wait_Ack(void)
+{
+    uint8_t ucErrTime = 0;
+    I2C_SCL_L;
+    I2C_SDA_IN; // SDA设置为输入
+    Delay_ms(1);
+    I2C_SCL_H;
+    Delay_ms(1);
+    while (I2C_READ_SDA)
+    {
+        if (ucErrTime++ > 250)
+        {
+            // I2C_Stop();
+            // printf("接受应答失败\n");
+            return 1;
+        }
+    }
+    I2C_SCL_L;
+    // printf("接受应答成功\n");
+    return 0;
+}
+
+/// 发送一个字节
+void I2C_Send_Byte(uint8_t d)
+{
+    uint8_t t = 0;
+    I2C_SDA_OUT;
+    while (8 > t++)
+    {
+        I2C_SCL_L;
+        Delay_ms(1);
+        if (d & 0x80)
+        {
+            I2C_SDA_H;
+        }
+        else
+        {
+            I2C_SDA_L;
+        }
+        Delay_ms(1); // 对TEA5767这三个延时都是必须的
+        I2C_SCL_H;
+        Delay_ms(1);
+        d <<= 1;
+    }
+}
+
+/// 读 1 个字节
+uint8_t I2C_Read_Byte(uint8_t ack)
+{
+    uint8_t i = 0;
+    uint8_t receive = 0;
+    I2C_SDA_IN; // SDA设置为输入
+    for (i = 0; i < 8; i++)
+    {
+        I2C_SCL_L;
+        Delay_ms(1);
+        I2C_SCL_H;
+        receive <<= 1;
+        if (I2C_READ_SDA)
+        {
+            receive++;
+        }
+        Delay_ms(1);
+    }
+    I2C_Ack(ack); // 发送ACK
+    return receive;
+}
+
+/// 发送数据并返回应答
+uint8_t SendByteAndGetNACK(uint8_t data)
+{
+    I2C_Send_Byte(data);
+    return I2C_Wait_Ack();
+}
+
+/// SC12B 简易读取按键值函数（默认直接读取）
+/// 此函数只有初始化配置默认的情况下，直接调用，如果在操作前有写入或者其他读取不能调用默认
+uint8_t I2C_Read_Key(void)
+{
+    I2C_Start();
+    if (SendByteAndGetNACK((0x40 << 1) | 0x01))
+    {
+        I2C_Stop();
+        return 0;
+    }
+    uint8_t i = 0;
+    uint8_t k = 0;
+    I2C_SDA_IN; // SDA设置为输入
+    while (8 > i)
+    {
+        i++;
+        I2C_SCL_L;
+        Delay_ms(1);
+        I2C_SCL_H;
+        if (!k && I2C_READ_SDA)
+        {
+            k = i;
+        }
+        Delay_ms(1);
+    }
+    if (k)
+    {
+        I2C_Ack(1);
+        I2C_Stop();
+        return k;
+    }
+    I2C_Ack(0);
+    I2C_SDA_IN; // SDA设置为输入
+    while (16 > i)
+    {
+        i++;
+        I2C_SCL_L;
+        Delay_ms(1);
+        I2C_SCL_H;
+        if (!k && I2C_READ_SDA)
+        {
+            k = i;
+        }
+        Delay_ms(1);
+    }
+    I2C_Ack(1);
+    I2C_Stop();
+    return k;
+}
+
+uint8_t KEYBOARD_read_key(void)
+{
+    uint16_t key = I2C_Read_Key();
+    if (key == 4)
+    {
+        return 1;
+    }
+    else if (key == 3)
+    {
+        return 2;
+    }
+    else if (key == 2)
+    {
+        return 3;
+    }
+    else if (key == 7)
+    {
+        return 4;
+    }
+    else if (key == 6)
+    {
+        return 5;
+    }
+    else if (key == 5)
+    {
+        return 6;
+    }
+    else if (key == 10)
+    {
+        return 7;
+    }
+    else if (key == 9)
+    {
+        return 8;
+    }
+    else if (key == 8)
+    {
+        return 9;
+    }
+    else if (key == 1)
+    {
+        return 0;
+    }
+    else if (key == 12)
+    {
+        return '#';
+    }
+    else if (key == 11)
+    {
+        return 'M';
+    }
+    return 255;
+}
+
+/// GPIO初始化
+void KEYBORAD_init(void)
+{
+    gpio_config_t io_conf;
+    // disable interrupt
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    // set as output mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    // bit mask of the pins that you want to set,e.g.SDA
+    io_conf.pin_bit_mask = ((1ULL << SC12B_SCL) | (1ULL << SC12B_SDA));
+    // disable pull-down mode
+    io_conf.pull_down_en = 0;
+    // disable pull-up mode
+    io_conf.pull_up_en = 1;
+    // configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    // 中断
+    io_conf.intr_type = GPIO_INTR_POSEDGE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = (1ULL << SC12B_INT);
+    gpio_config(&io_conf);
+}
+```
+
+驱动编写好之后，我们可以在主函数中和电容键盘进行通信了。当按下按键，会产生中断，通过处理中断来识别我们的按键。
+
+在 `smart-lock.c` 文件中，主函数是 `app_main` ，`ESP-IDF` 在编译整个项目的时候，会将 `app_main` 注册为一个任务。无需我们自己编写 `main` 函数。
+
+`smart-lock.c` 文件内容如下。
+
+```c
+// 全局变量，用来存储来自 GPIO 的中断事件
+static QueueHandle_t gpio_evt_queue = NULL;
+
+static void IRAM_ATTR gpio_isr_handler(void *arg)
+{
+  uint32_t gpio_num = (uint32_t)arg;
+  // 将产生中断的GPIO引脚号入队列。
+  xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+}
+
+// 轮训中断事件队列，然后挨个处理
+static void process_isr(void *arg)
+{
+  uint32_t io_num;
+  for (;;)
+  {
+    if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY))
+    {
+      if (io_num == 0)
+      {
+        uint8_t key = KEYBOARD_read_key();
+        printf("按下的键：%d\r\n", key);
+      }
+    }
+  }
+}
+
+static void ISR_QUEUE_Init(void)
+{
+  // 创建一个队列来处理来自GPIO的中断事件
+  gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+  // 开启 process_isr 任务。这个任务的作用是轮训存储中断事件的队列，将队列中的事件
+  // 挨个出队列并进行处理。
+  xTaskCreate(process_isr, "process_isr", 2048, NULL, 10, NULL);
+
+  gpio_install_isr_service(0);
+  // 将 SC12B_INT 引脚产生的中断交由 gpio_isr_handler 处理。
+  // 也就是说一旦 SC12B_INT 产生中断，则调用 gpio_isr_handler 函数。
+  gio_isr_handler_add(SC12B_INT, gpio_isr_handler, (void *)SC12B_INT);
+}
+
+// 主程序
+void app_main(void)
+{
+  ISR_QUEUE_Init();
+}
+```
