@@ -789,3 +789,60 @@ void Line_1A_WT588F(uint8_t DDATA)
     DELAY_MS(2);
 }
 ```
+
+= 电机驱动
+
+电机用来开关锁。也就是通过驱动电机进行正转反转来开关锁。
+
+当然我们还是通过 GPIO 的拉高拉低来驱动电机。比较简单。
+
+电路图如下：
+
+#figure(image("motor.png", width: 80%), caption: [电机模块电路图])
+
+初始化 GPIO 引脚代码
+
+```c
+void MOTOR_Init(void)
+{
+    gpio_config_t io_conf;
+    // 禁用中断
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    // 设置为输出模式
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    // 设置要用的两个引脚
+    io_conf.pin_bit_mask = ((1ULL << MOTOR_DRIVER_NUM_0) | (1ULL << MOTOR_DRIVER_NUM_1));
+    gpio_config(&io_conf);
+
+    // 最开始都输出低电平，这样就不转
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+}
+```
+
+开锁代码
+
+```c
+void MOTOR_Open_lock(void)
+{
+    // 正转 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 1);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // 停止 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // 反转 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 1);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // 停止转动并播报语音
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    Line_1A_WT588F(25);
+}
+```
