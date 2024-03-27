@@ -719,3 +719,73 @@ void light_led(uint8_t led_num)
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
 }
 ```
+
+尝试编写代码调用点灯方法，将灯点亮。
+
+= 语音模块
+
+我们使用 WTN6170 作为语音模块外设。可以使用一根 GPIO 线来控制 WTN6170 。
+
+#figure(image("WTN6170.png", width: 80%), caption: [语音模块电路图])
+
+我们来编写初始化 GPIO 引脚的代码。
+
+```c
+void AUDIO_Init(void)
+{
+    ESP_LOGI(AUDIO_TAG, "WTN6170P20_Init");
+
+    gpio_config_t io_conf = {};
+    // 禁用中断
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    // 设置为输出模式
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    // 引脚是数据线
+    io_conf.pin_bit_mask = (1ULL << AUDIO_SDA_PIN);
+    gpio_config(&io_conf);
+
+    // 禁用中断
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    // 设置为输入模式
+    io_conf.mode = GPIO_MODE_INPUT;
+    // 引脚是忙线
+    io_conf.pin_bit_mask = (1ULL << AUDIO_BUSY_PIN);
+    gpio_config(&io_conf);
+}
+```
+
+给语音模块发送数据并播报的代码，通过发送不同的 u8 数据，使语音模块播放不同的声音。具体参见语音模块文档。
+
+```c
+void Line_1A_WT588F(uint8_t DDATA)
+{
+    ESP_LOGI(AUDIO_TAG, "Line_1A_WT588F data:0X%2X", DDATA);
+    uint8_t S_DATA, j;
+    uint8_t B_DATA;
+    S_DATA = DDATA;
+    AUDIO_SDA_L;
+    DELAY_MS(10); // 这里的延时比较重要
+    B_DATA = S_DATA & 0X01;
+    for (j = 0; j < 8; j++)
+    {
+        if (B_DATA == 1)
+        {
+            AUDIO_SDA_H;
+            DELAY_US(600); // 延时600us
+            AUDIO_SDA_L;
+            DELAY_US(200); // 延时200us
+        }
+        else
+        {
+            AUDIO_SDA_H;
+            DELAY_US(200); // 延时200us
+            AUDIO_SDA_L;
+            DELAY_US(600); // 延时600us
+        }
+        S_DATA = S_DATA >> 1;
+        B_DATA = S_DATA & 0X01;
+    }
+    AUDIO_SDA_H;
+    DELAY_MS(2);
+}
+```
