@@ -848,3 +848,10 @@ void MOTOR_Open_lock(void)
     Line_1A_WT588F(25);
 }
 ```
+
+= 指纹模块
+
+MCU 使用串口和指纹模块进行通信。电路图如下：
+
+#figure(image("fingerprint.png", width: 80%), caption: [指纹模块电路图])
+
