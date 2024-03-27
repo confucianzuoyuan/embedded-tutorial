@@ -260,7 +260,9 @@ gpio_set_level(GPIO_NUM_1, 0);
 gpio_get_level(GPIO_NUM_2);
 ```
 
-有了这些API，我们可以实现 IIC 协议了。
+有了这些API，我们可以实现 IIC 协议了。然后就可以实现按键功能了。键盘电路图如下：
+
+#figure(image("keyboard.png", width: 80%), caption: [键盘模块电路图])
 
 为了方便操作，我们先来定义一组宏定义以及声明头文件。
 
