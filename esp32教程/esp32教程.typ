@@ -683,3 +683,39 @@ RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，�
 3. 根据不同的厂商生产不同，驱动的方式有所不一样！下面发送数据顺序是：`GREEN -- BLUE -- RED` 。
 
 #figure(image("rmt-rgb.png", width: 80%), caption: [发送颜色的顺序])
+
+== 代码
+
+由于大部分代码都是示例代码。这里只给出新添加的部分，也就是点亮某一个灯的代码。
+
+```c
+// `led_num` 参数是要点亮的灯的索引。`LED_NUMBERS == 12`，因为我们有 12 个灯。
+void light_led(uint8_t led_num)
+{
+    for (int i = 0; i < 3; i++)
+    {
+        // 构建 RGB 像素点
+        hue = led_num * 360 / LED_NUMBERS;
+        // 编码 RGB 值
+        led_strip_hsv2rgb(hue, 30, 30, &red, &green, &blue);
+        // 发送顺序 GREEN --> BLUE --> RED
+        led_strip_pixels[led_num * 3 + 0] = green;
+        led_strip_pixels[led_num * 3 + 1] = blue;
+        led_strip_pixels[led_num * 3 + 2] = red;
+    }
+
+    // 将 RGB 值通过通道发送至 LED 灯。点亮灯。
+    ESP_ERROR_CHECK(rmt_transmit(led_chan, led_encoder, led_strip_pixels, sizeof(led_strip_pixels), &tx_config));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
+
+    // 延时 100 毫秒
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    // 清空像素矩阵
+    memset(led_strip_pixels, 0, sizeof(led_strip_pixels));
+
+    // 再次发送，将灯灭掉。
+    ESP_ERROR_CHECK(rmt_transmit(led_chan, led_encoder, led_strip_pixels, sizeof(led_strip_pixels), &tx_config));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
+}
+```
