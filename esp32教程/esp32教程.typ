@@ -1117,6 +1117,22 @@ void read_sys_params(void)
 
 实现了蓝牙功能和我们后面的 WIFI 功能，其实就可以自己编写代码作为固件烧录到 ESP32C3 里面了。这样也可以作为 STM32 的外设来使用了。这是 ESP32 所具有的独特的功能。
 
+蓝牙技术是一种无线通讯技术，广泛用于短距离内的数据交换。在蓝牙技术中，"Bluedroid"和"BLE"（Bluetooth Low Energy）是两个重要的概念，它们分别代表了蓝牙技术的不同方面。
+
+Bluedroid
+
+Bluedroid是Android操作系统用于实现蓝牙功能的软件栈。在Android 4.2版本中引入，Bluedroid取代了之前的BlueZ作为Android平台的蓝牙协议栈。Bluedroid是由Broadcom公司开发并贡献给Android开源项目的（AOSP），它支持经典蓝牙以及蓝牙低功耗（BLE）。
+
+Bluedroid协议栈设计目的是为了提供一个更轻量级、更高效的蓝牙协议栈，以适应移动设备对资源的紧张需求。它包括了蓝牙核心协议、各种蓝牙配置文件（如HSP、A2DP、AVRCP等）和BLE相关的服务和特性。
+
+BLE（Bluetooth Low Energy）
+
+BLE，即蓝牙低功耗技术，是蓝牙4.0规范中引入的一项重要技术。与传统的蓝牙技术（现在通常称为经典蓝牙）相比，BLE主要设计目标是实现极低的功耗，以延长设备的电池使用寿命，非常适合于需要长期运行但只需偶尔传输少量数据的应用场景，如健康和健身监测设备、智能家居设备等。
+
+BLE实现了一套与经典蓝牙不同的通信协议，包括低功耗的物理层、链路层协议以及应用层协议。BLE设备可以以极低的能耗状态长时间待机，只有在需要通信时才唤醒，这使得使用小型电池的设备也能达到数月甚至数年的电池寿命。
+
+总的来说，Bluedroid是Android平台上用于实现蓝牙通信功能的软件栈，而BLE则是蓝牙技术中的一种用于实现低功耗通信的标准。两者共同为Android设备提供了广泛的蓝牙通信能力，满足了不同应用场景下的需求。
+
 我们先来看蓝牙功能的初始化代码。里面有大量错误处理的代码。其实核心代码并不多。
 
 ```c ESP_ERROR_CHECK``` 是一个宏定义，用来检测各种返回值是否出错。
@@ -1129,16 +1145,27 @@ void BLUETOOTH_Init(void)
     /* Initialize NVS. */
     /// NVS 就是在 flash 上分配的一块内存空间 ，提供给用户保存掉电不丢失的数据 。
     ret = nvs_flash_init();
+    /// 如果 flash 没有空闲页面，或者发现新的版本，
+    /// 则擦除 flash 并重新初始化。
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
+    /// 错误检查
     ESP_ERROR_CHECK(ret);
 
+    /// 如果选用BLE模式就要在初始化之前先释放CLASSIC模式的内存。
+    /// 是因为在配置BLE之前会调用esp_bt_controller_init()函数来初始化bt的协议栈，
+    /// 而我们针对bt的初始化用的的内存空间是固定的，那么在调用初始化bt之前先把CLASSIC部分会用到的内存给释放掉，
+    /// 再在初始化bt的时候，初始化函数就会发现CLASSIC这部分的内存被释放掉了，
+    /// 也就不会初始化对应的内容；但是如果在初始化函数之后再去释放CLASSIC对应内存的时候，
+    /// 当然就会发生内存踩踏事件（esp_bt_controller_init()这个函数并不知道你要用BLE还是CLASSIC）。
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
+    /// 获取蓝牙的默认配置
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    /// 初始化蓝牙控制器
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret)
     {
