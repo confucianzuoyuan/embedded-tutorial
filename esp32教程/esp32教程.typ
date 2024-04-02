@@ -1743,8 +1743,358 @@ esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
 
 == 连接事件
 
+当客户端连接到GATT服务器时，将触发`ESP_GATTS_CONNECT_EVT`事件。此事件用于更新连接参数，如延迟、最小连接间隔、最大连接间隔和超时。连接参数被存储到一个`esp_ble_conn_update_params_t`结构体中，然后传递给`esp_ble_gap_update_conn_params()`函数。更新连接参数的过程只需要做一次，因此配置文件B的连接事件处理器不包括`esp_ble_gap_update_conn_params()`函数。最后，事件返回的连接ID被存储在配置文件表中。
+
+配置文件A连接事件：
+
+```c
+case ESP_GATTS_CONNECT_EVT: {  
+     esp_ble_conn_update_params_t conn_params = {0};  
+     memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
+     /* For the IOS system, please reference the apple official documents about the ble connection parameters restrictions. */
+     conn_params.latency = 0;  
+     conn_params.max_int = 0x30;    // max_int = 0x30*1.25ms = 40ms  
+     conn_params.min_int = 0x10;    // min_int = 0x10*1.25ms = 20ms   
+     conn_params.timeout = 400;     // timeout = 400*10ms = 4000ms  
+     ESP_LOGI(GATTS_TAG, "ESP_GATTS_CONNECT_EVT, conn_id %d, remote %02x:%02x:%02x:%02x:%02x:%02x:, is_conn %d",  
+             param->connect.conn_id,  
+             param->connect.remote_bda[0],  
+             param->connect.remote_bda[1],  
+             param->connect.remote_bda[2],  
+             param->connect.remote_bda[3],  
+             param->connect.remote_bda[4],  
+             param->connect.remote_bda[5],  
+             param->connect.is_connected);
+ 	 gl_profile_tab[PROFILE_A_APP_ID].conn_id = param->connect.conn_id;
+	 //start sent the update connection parameters to the peer device.
+	 esp_ble_gap_update_conn_params(&conn_params);
+	 break;
+    }
+```
+
+配置文件 B 连接事件：
+
+```c
+case ESP_GATTS_CONNECT_EVT:  
+     ESP_LOGI(GATTS_TAG, "CONNECT_EVT, conn_id %d, remote %02x:%02x:%02x:%02x:%02x:%02x:, is_conn %d\n",  
+              param->connect.conn_id,  
+              param->connect.remote_bda[0],  
+              param->connect.remote_bda[1],  
+              param->connect.remote_bda[2],  
+              param->connect.remote_bda[3],  
+              param->connect.remote_bda[4],  
+              param->connect.remote_bda[5],  
+              param->connect.is_connected);
+	  gl_profile_tab[PROFILE_B_APP_ID].conn_id = param->connect.conn_id;
+	  break;
+```
+
+`esp_ble_gap_update_conn_params()`函数触发一个GAP事件`ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT`，用于打印连接信息：
+
+```c
+    case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
+         ESP_LOGI(GATTS_TAG, "update connection params status = %d, min_int = %d, max_int = %d,
+                  conn_int = %d,latency = %d, timeout = %d",
+                  param->update_conn_params.status,
+                  param->update_conn_params.min_int,
+                  param->update_conn_params.max_int,
+                  param->update_conn_params.conn_int,
+                  param->update_conn_params.latency,
+                  param->update_conn_params.timeout);
+         break;
+```
+
 == 管理读事件
 
+现在服务和特性已经创建并启动，程序可以接收读和写事件。读操作由`ESP_GATTS_READ_EVT`事件表示，该事件有以下参数：
+
+```c
+uint16_t conn_id;          /*!< Connection id */
+uint32_t trans_id;         /*!< Transfer id */
+esp_bd_addr_t bda;         /*!< The bluetooth device address which been read */
+uint16_t handle;           /*!< The attribute handle */
+uint16_t offset;           /*!< Offset of the value, if the value is too long */
+bool is_long;              /*!< The value is too long or not */
+bool need_rsp;             /*!< The read operation need to do response */
+```
+
+在这个示例中，使用事件给定的相同句柄，构造一个带有虚拟数据的响应并发送回主机。除了响应之外，GATT接口、连接ID和传输ID也作为参数包含在`esp_ble_gatts_send_response()`函数中。如果在创建特性或描述符时将自动响应字节设置为NULL，则需要此函数。
+
+```c
+case ESP_GATTS_READ_EVT: {
+     ESP_LOGI(GATTS_TAG, "GATT_READ_EVT, conn_id %d, trans_id %d, handle %d\n",  
+              param->read.conn_id, param->read.trans_id, param->read.handle);  
+              esp_gatt_rsp_t rsp;  
+              memset(&rsp, 0, sizeof(esp_gatt_rsp_t));  
+              rsp.attr_value.handle = param->read.handle;  
+              rsp.attr_value.len = 4;  
+              rsp.attr_value.value[0] = 0xde;  
+              rsp.attr_value.value[1] = 0xed;  
+              rsp.attr_value.value[2] = 0xbe;  
+              rsp.attr_value.value[3] = 0xef;  
+              esp_ble_gatts_send_response(gatts_if,  
+                                          param->read.conn_id,  
+                                          param->read.trans_id,  
+                                          ESP_GATT_OK, &rsp);
+     break;
+    }
+```
+
 == 管理写事件
+
+The write events are represented by the `ESP_GATTS_WRITE_EVT` event, which has the following parameters:
+
+```c
+uint16_t conn_id;         /*!< Connection id */
+uint32_t trans_id;        /*!< Transfer id */
+esp_bd_addr_t bda;        /*!< The bluetooth device address which been written */
+uint16_t handle;          /*!< The attribute handle */
+uint16_t offset;          /*!< Offset of the value, if the value is too long */
+bool need_rsp;            /*!< The write operation need to do response */
+bool is_prep;             /*!< This write operation is prepare write */
+uint16_t len;             /*!< The write attribute value length */
+uint8_t *value;           /*!< The write attribute value */
+```
+
+There are two types of write events implemented in this example, write characteristic value and write long characteristic value. The first type of write is used when the characteristic value can fit in one Attribute Protocol Maximum Transmission Unit (ATT MTU), which is usually 23 bytes long. The second type is used when the attribute to write is longer than what can be sent in one single ATT message by dividing the data into multiple chunks using Prepare Write Responses, after which an Executive Write Request is used to confirm or cancel the complete write request. This behavior is defined in the [Bluetooth Specification Version 4.2](https://www.bluetooth.com/specifications/bluetooth-core-specification), Vol 3, Part G, section 4.9. The write long characteristic message flow is shown in the figure below.
+
+When a write event is triggered, this example prints logging messages, and then executes the `example_write_event_env()` function.
+
+```c
+case ESP_GATTS_WRITE_EVT: {                          
+     ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, conn_id %d, trans_id %d, handle %d\n", param->write.conn_id, param->write.trans_id, param->write.handle);
+     if (!param->write.is_prep){
+        ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, value len %d, value :", param->write.len);
+        esp_log_buffer_hex(GATTS_TAG, param->write.value, param->write.len);
+        if (gl_profile_tab[PROFILE_B_APP_ID].descr_handle == param->write.handle && param->write.len == 2){
+            uint16_t descr_value= param->write.value[1]<<8 | param->write.value[0];
+            if (descr_value == 0x0001){
+                if (b_property & ESP_GATT_CHAR_PROP_BIT_NOTIFY){
+                    ESP_LOGI(GATTS_TAG, "notify enable");
+                    uint8_t notify_data[15];
+                    for (int i = 0; i < sizeof(notify_data); ++i)
+                    {
+                         notify_data[i] = i%0xff;  
+                     }
+                     //the size of notify_data[] need less than MTU size
+                     esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,  
+                                                 gl_profile_tab[PROFILE_B_APP_ID].char_handle,  
+                                                 sizeof(notify_data),  
+                                                 notify_data, false);
+                }
+            }else if (descr_value == 0x0002){
+                 if (b_property & ESP_GATT_CHAR_PROP_BIT_INDICATE){
+                     ESP_LOGI(GATTS_TAG, "indicate enable");
+                     uint8_t indicate_data[15];
+                     for (int i = 0; i < sizeof(indicate_data); ++i)
+                     {
+                         indicate_data[i] = i % 0xff;
+                      }
+                      //the size of indicate_data[] need less than MTU size
+                     esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,  
+                                                 gl_profile_tab[PROFILE_B_APP_ID].char_handle,  
+                                                 sizeof(indicate_data),  
+                                                 indicate_data, true);
+                }
+             }
+             else if (descr_value == 0x0000){
+                 ESP_LOGI(GATTS_TAG, "notify/indicate disable ");
+             }else{
+                 ESP_LOGE(GATTS_TAG, "unknown value");
+             }
+        }
+    }
+    example_write_event_env(gatts_if, &a_prepare_write_env, param);
+    break;
+}
+```
+
+#figure(image("GATT_Server_Figure_2.png", width: 80%), caption: [离线安装包示意图])
+
+The `example_write_event_env()` function contains the logic for the write long characteristic procedure:
+
+```c
+void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
+    esp_gatt_status_t status = ESP_GATT_OK;
+    if (param->write.need_rsp){
+       if (param->write.is_prep){
+            if (prepare_write_env->prepare_buf == NULL){
+                prepare_write_env->prepare_buf = (uint8_t *)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));
+                prepare_write_env->prepare_len = 0;
+                if (prepare_write_env->prepare_buf == NULL) {
+                    ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
+                    status = ESP_GATT_NO_RESOURCES;
+                }
+            } else {
+                if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
+                    status = ESP_GATT_INVALID_OFFSET;
+                }
+                else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
+                    status = ESP_GATT_INVALID_ATTR_LEN;
+                }
+            }
+
+            esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
+            gatt_rsp->attr_value.len = param->write.len;
+            gatt_rsp->attr_value.handle = param->write.handle;
+            gatt_rsp->attr_value.offset = param->write.offset;
+            gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+            memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
+            esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
+                                                                 param->write.trans_id, status, gatt_rsp);
+            if (response_err != ESP_OK){
+               ESP_LOGE(GATTS_TAG, "Send response error\n");
+            }
+            free(gatt_rsp);
+            if (status != ESP_GATT_OK){
+                return;
+            }
+            memcpy(prepare_write_env->prepare_buf + param->write.offset,
+                   param->write.value,
+                   param->write.len);
+            prepare_write_env->prepare_len += param->write.len;
+
+        }else{
+            esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
+        }
+    }
+}
+```
+
+When the client sends a Write Request or a Prepare Write Request, the server shall respond. However, if the client sends a Write Without Response command, the server does not need to reply back a response. This is checked in the write procedure by examining the value of the `write.need_rsp parameter`. If a response is needed, the procedure continues doing the response preparation, if not present, the client does not need a response and therefore the procedure is ended.
+
+```c
+void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env,  
+                             esp_ble_gatts_cb_param_t *param){
+    esp_gatt_status_t status = ESP_GATT_OK;
+    if (param->write.need_rsp){
+…
+```
+
+The function then checks if the Prepare Write Request parameter represented by the `write.is_prep` is set, which means that the client is requesting a Write Long Characteristic. If present, the procedure continues with the preparation of multiple write responses, if not present, then the server simply sends a single write response back.
+
+```c
+…
+if (param->write.is_prep){
+…
+}else{
+	esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
+}
+…
+```
+
+To handle long characteristic write, a prepare buffer structure is defined and instantiated:
+
+```c
+typedef struct {
+    uint8_t                 *prepare_buf;
+    int                      prepare_len;
+} prepare_type_env_t;
+
+static prepare_type_env_t a_prepare_write_env;
+static prepare_type_env_t b_prepare_write_env;
+```
+In order to use the prepare buffer, some memory space is allocated for it. In case the allocation fails due to a lack of memory, an error is printed:
+
+```c
+if (prepare_write_env->prepare_buf == NULL) {
+    prepare_write_env->prepare_buf =  
+    (uint8_t*)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));  
+    prepare_write_env->prepare_len = 0;
+    if (prepare_write_env->prepare_buf == NULL) {  
+       ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
+       status = ESP_GATT_NO_RESOURCES;
+    }
+}
+```
+
+If the buffer is not NULL, which means initialization completed, the procedure then checks if the offset and message length of the incoming write fit the buffer.
+
+```c
+else {
+	if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
+		status = ESP_GATT_INVALID_OFFSET;
+	}
+	else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
+		 status = ESP_GATT_INVALID_ATTR_LEN;
+	}
+}
+```
+
+The procedure now prepares the response of type `esp_gatt_rsp_t` to be sent back to the client. The response it constructed using the same parameters of the write request, such as length, handle and offset. In addition, the GATT authentication type needed to write to this characteristic is set with `ESP_GATT_AUTH_REQ_NONE`, which means that the client can write to this characteristic without needing to authenticate first. Once the response is sent, the memory allocated for its use is freed.
+
+```c
+esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
+gatt_rsp->attr_value.len = param->write.len;
+gatt_rsp->attr_value.handle = param->write.handle;
+gatt_rsp->attr_value.offset = param->write.offset;
+gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
+esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
+                                                     param->write.trans_id, status, gatt_rsp);
+if (response_err != ESP_OK){
+	ESP_LOGE(GATTS_TAG, "Send response error\n");
+}
+free(gatt_rsp);
+if (status != ESP_GATT_OK){
+	return;
+}
+```
+Finally, the incoming data is copied to the buffer created and its length is incremented by the offset:
+
+```c
+memcpy(prepare_write_env->prepare_buf + param->write.offset,
+       param->write.value,  
+       param->write.len);
+prepare_write_env->prepare_len += param->write.len;
+```
+The client finishes the long write sequence by sending an Executive Write Request. This command triggers an `ESP_GATTS_EXEC_WRITE_EVT` event. The server handles this event by sending a response and executing the `example_exec_write_event_env()` function:
+
+```c
+case ESP_GATTS_EXEC_WRITE_EVT:  
+     ESP_LOGI(GATTS_TAG,"ESP_GATTS_EXEC_WRITE_EVT");  
+     esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, NULL);  
+     example_exec_write_event_env(&a_prepare_write_env, param);  
+     break;
+```
+Let’s take a look at the Executive Write function:
+
+```c
+void example_exec_write_event_env(prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
+    if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC){
+        esp_log_buffer_hex(GATTS_TAG, prepare_write_env->prepare_buf, prepare_write_env->prepare_len);
+    }
+    else{
+        ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
+    }
+    if (prepare_write_env->prepare_buf) {
+        free(prepare_write_env->prepare_buf);
+        prepare_write_env->prepare_buf = NULL;
+    }
+####     prepare_write_env->prepare_len = 0;
+}
+```
+
+The executive write is used to either confirm or cancel the write procedure done before, by the Long Characteristic Write procedure. In order to do this, the function checks for the `exec_write_flag` in the parameters received with the event. If the flag equals the execute flag represented by `exec_write_flag`, the write is confirmed and the buffer is printed in the log; if not, then it means the write is canceled and all the data that has been written is deleted.
+
+```c
+if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC){  
+   esp_log_buffer_hex(GATTS_TAG,  
+                      prepare_write_env->prepare_buf,  
+                      prepare_write_env->prepare_len);
+ }
+else{
+    ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
+ }
+```
+Finally, the buffer structure that was created to store the chunks of data from the long write operation is freed and its pointer is set to NULL to leave it ready for the next long write procedure.
+
+```c
+if (prepare_write_env->prepare_buf) {
+    free(prepare_write_env->prepare_buf);
+    prepare_write_env->prepare_buf = NULL;
+}
+prepare_write_env->prepare_len = 0;
+```
 
 == 总结
