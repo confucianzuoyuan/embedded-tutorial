@@ -1156,19 +1156,29 @@ BLE实现了一套与经典蓝牙不同的通信协议，包括低功耗的物�
 #include "sdkconfig.h"
 ```
 
-这些包含文件是运行FreeRTOS和底层系统组件所必需的，包括日志功能和一个用于在非易失性闪存中存储数据的库。我们对 `"esp_bt.h"`、`"esp_bt_main.h"`、`"esp_gap_ble_api.h"` 和 `"esp_gatts_api.h"` 特别感兴趣，这些文件暴露了实现此示例所需的BLE API。
+这些头文件是运行FreeRTOS和底层系统组件所必需的，包括日志功能和一个用于在非易失性闪存中存储数据的库。我们对 `"esp_bt.h"`、`"esp_bt_main.h"`、`"esp_gap_ble_api.h"` 和 `"esp_gatts_api.h"` 特别感兴趣，这些文件暴露了实现此示例所需的BLE API。
 
 - `esp_bt.h`：从主机侧实现BT控制器和VHCI配置程序。
-- `esp_bt_main.h`：实现Bluedroid堆栈的初始化和启用。
+- `esp_bt_main.h`：实现Bluedroid栈协议的初始化和启用。
 - `esp_gap_ble_api.h`：实现GAP配置，如广告和连接参数。
 - `esp_gatts_api.h`：实现GATT配置，如创建服务和特性。
+
+#info[
+VHCI（Virtual Host Controller Interface）是一个虚拟的主机控制器接口，它通常用于软件或硬件模拟中，以模拟主机控制器的行为。在不同的上下文中，VHCI可以指代不同的技术或应用，但基本概念相似，都是提供一个虚拟的接口来模拟实际的硬件或软件行为。
+
+在蓝牙技术领域，VHCI特别指向用于模拟蓝牙主机控制器（Host Controller）的接口。这可以用于蓝牙协议栈的开发和测试，允许开发者在没有实际蓝牙硬件的情况下模拟蓝牙设备的行为。通过VHCI，软件可以模拟发送和接收蓝牙数据包，从而测试蓝牙应用程序和服务的实现。
+
+在其他情况下，VHCI也可以用于USB（通用串行总线）技术，作为一个虚拟的USB主机控制器，来模拟USB设备的连接和通信。
+
+总的来说，VHCI是一个非常有用的工具，特别是在设备驱动和协议栈开发的早期阶段，它可以帮助开发者在没有实际硬件的情况下进行软件开发和测试。
+]
 
 == 入口函数
 
 入口函数是 `app_main()` 函数。
 
 ```c
- void app_main()
+void app_main()
 {
     esp_err_t ret;
 
@@ -1239,7 +1249,7 @@ ret = nvs_flash_init();
 
 == 蓝牙控制器和栈协议初始化(BT Controller and Stack Initialization)
 
-主函数还通过首先创建一个名为 `esp_bt_controller_config_t` 的BT控制器配置结构体来初始化BT控制器，该结构体使用 `BT_CONTROLLER_INIT_CONFIG_DEFAULT()` 宏生成的默认设置。BT控制器在控制器侧实现了主控制器接口（HCI）、链路层（LL）和物理层（PHY）。BT控制器对用户应用程序是不可见的，它处理BLE堆栈的底层。控制器配置包括设置BT控制器堆栈大小、优先级和HCI波特率。使用创建的设置，通过 `esp_bt_controller_init()` 函数初始化并启用BT控制器：
+主函数还通过首先创建一个名为 `esp_bt_controller_config_t` 的BT控制器配置结构体来初始化BT控制器，该结构体使用 `BT_CONTROLLER_INIT_CONFIG_DEFAULT()` 宏生成的默认设置。BT控制器在控制器侧实现了主控制器接口（HCI）、链路层（LL）和物理层（PHY）。BT控制器对用户应用程序是不可见的，它处理BLE栈协议的底层。控制器配置包括设置BT控制器堆栈大小、优先级和HCI波特率。使用创建的设置，通过 `esp_bt_controller_init()` 函数初始化并启用BT控制器：
 
 ```c
 esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
@@ -1261,14 +1271,14 @@ ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
 3. `ESP_BT_MODE_CLASSIC_BT`：经典蓝牙模式
 4. `ESP_BT_MODE_BTDM`：双模式（BLE + 经典蓝牙）
 
-在BT控制器初始化之后，Bluedroid堆栈（包括经典蓝牙和BLE的共同定义和API）通过使用以下方式被初始化和启用：
+在BT控制器初始化之后，Bluedroid 栈协议（包括经典蓝牙和BLE的共同定义和API）通过使用以下方式被初始化和启用：
 
 ```c
 ret = esp_bluedroid_init();
 ret = esp_bluedroid_enable();
 ```
 
-此时程序流程中的蓝牙堆栈已经启动并运行，但应用程序的功能尚未定义。功能是通过响应事件来定义的，例如当另一个设备尝试读取或写入参数并建立连接时会发生什么。两个主要的事件管理器是GAP和GATT事件处理器。应用程序需要为每个事件处理器注册一个回调函数，以便让应用程序知道哪些函数将处理GAP和GATT事件：
+此时程序流程中的蓝牙栈协议已经启动并运行，但应用程序的功能尚未定义。功能是通过响应事件来定义的，例如当另一个设备尝试读取或写入参数并建立连接时会发生什么。两个主要的事件管理器是 GAP 和 GATT 事件处理器。应用程序需要为每个事件处理器注册一个回调函数，以便让应用程序知道哪些函数将处理 GAP 和 GATT 事件：
 
 ```c
 esp_ble_gatts_register_callback(gatts_event_handler);
@@ -1283,7 +1293,7 @@ esp_ble_gap_register_callback(gap_event_handler);
 
 #figure(image("GATT_Server_Figure_1.png", width: 80%), caption: [GATT服务器])
 
-每个配置文件都定义为一个结构体，其中结构体成员取决于在该应用程序配置文件中实现的服务和特性。成员还包括一个GATT接口、应用程序ID、连接ID和一个回调函数来处理配置文件事件。在这个示例中，每个配置文件由以下组成：
+每个配置文件都定义为一个结构体，其中结构体成员取决于在该应用程序配置文件中实现的服务和特性。成员还包括一个 GATT 接口、应用程序 ID 、连接 ID 和一个回调函数来处理配置文件事件。在这个示例中，每个配置文件由以下组成：
 
 - GATT接口
 - 应用程序ID
@@ -1538,7 +1548,7 @@ esp_gatt_status_t status;  /*!< Operation status */`
 uint16_t app_id;           /*!< Application id which input in register API */`
 ```
 
-除了前面的参数外，该事件还包含由BLE堆栈分配的GATT接口。该事件被`gatts_event_handler()`捕获，该处理器用于将生成的接口存储在配置文件表中，然后将事件转发到相应的配置文件事件处理器。
+除了前面的参数外，该事件还包含由 BLE 栈协议分配的 GATT 接口。该事件被`gatts_event_handler()`捕获，该处理器用于将生成的接口存储在配置文件表中，然后将事件转发到相应的配置文件事件处理器。
 
 ```c
 static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
@@ -1572,7 +1582,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 
 == 创建服务
 
-注册事件还用于通过使用`esp_ble_gatts_create_service()`创建服务。当服务创建完成时，会调用回调事件ESP_GATTS_CREATE_EVT来向配置文件报告状态和服务ID。创建服务的方式是：
+注册事件还用于通过使用`esp_ble_gatts_create_service()`创建服务。当服务创建完成时，会调用回调事件 `ESP_GATTS_CREATE_EVT` 来向配置文件报告状态和服务ID。创建服务的方式是：
 
 ```c
 ...
@@ -1645,7 +1655,7 @@ case ESP_GATTS_CREATE_EVT:
     break;
 ```
 
-首先，由BLE堆栈生成的服务句柄被存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特性的UUID及其UUID长度。特性UUID的长度再次为16位。使用之前生成的服务句柄，通过`esp_ble_gatts_start_service()`函数启动服务。触发了一个`ESP_GATTS_START_EVT`事件，用于打印信息。特性通过`esp_ble_gatts_add_char()`函数添加到服务中，结合特性的权限和属性。在这个示例中，两个配置文件中的特性都按以下方式设置：
+首先，由 BLE 堆栈生成的服务句柄被存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特性的 UUID 及其 UUID 长度。特性 UUID 的长度再次为16位。使用之前生成的服务句柄，通过 `esp_ble_gatts_start_service()` 函数启动服务。触发了一个 `ESP_GATTS_START_EVT` 事件，用于打印信息。特性通过 `esp_ble_gatts_add_char()` 函数添加到服务中，结合特性的权限和属性。在这个示例中，两个配置文件中的特性都按以下方式设置：
 
 权限：
 
@@ -1697,7 +1707,7 @@ uint16_t service_handle;           /*!< Service attribute handle */
 esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
 ```
 
-事件返回的属性句柄被存储在配置文件表中，同时也设置了特性描述符的长度和UUID。使用`esp_ble_gatts_get_attr_value()`函数读取特性的长度和值，然后出于信息目的打印出来。最后，使用`esp_ble_gatts_add_char_descr()`函数添加特性描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值和自动响应设置。特性描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
+事件返回的属性句柄被存储在配置文件表中，同时也设置了特性描述符的长度和 UUID 。使用`esp_ble_gatts_get_attr_value()`函数读取特性的长度和值，然后出于信息目的打印出来。最后，使用`esp_ble_gatts_add_char_descr()`函数添加特性描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值和自动响应设置。特性描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
 
 ```c
     case ESP_GATTS_ADD_CHAR_EVT: {
