@@ -1133,92 +1133,398 @@ BLE实现了一套与经典蓝牙不同的通信协议，包括低功耗的物�
 
 总的来说，Bluedroid是Android平台上用于实现蓝牙通信功能的软件栈，而BLE则是蓝牙技术中的一种用于实现低功耗通信的标准。两者共同为Android设备提供了广泛的蓝牙通信能力，满足了不同应用场景下的需求。
 
-我们先来看蓝牙功能的初始化代码。里面有大量错误处理的代码。其实核心代码并不多。
+在本文档中，我们回顾了在ESP32上实现蓝牙低功耗（BLE）通用属性配置文件（GATT）服务器的GATT SERVER示例代码。这个示例围绕两个应用程序配置文件和一系列事件设计，这些事件被处理以执行一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。此外，这个示例处理读写事件，包括一个写长特性请求，它将传入数据分割成块，以便数据能够适应属性协议（ATT）消息。本文档遵循程序工作流程，并分解代码以便理解每个部分和实现背后的原因。
 
-```c ESP_ERROR_CHECK``` 是一个宏定义，用来检测各种返回值是否出错。
+== Includes
 
 ```c
-void BLUETOOTH_Init(void)
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_bt.h"
+#include "esp_gap_ble_api.h"
+#include "esp_gatts_api.h"
+#include "esp_bt_defs.h"
+#include "esp_bt_main.h"
+#include "esp_gatt_common_api.h"
+#include "sdkconfig.h"
+```
+
+这些包含文件是运行FreeRTOS和底层系统组件所必需的，包括日志功能和一个用于在非易失性闪存中存储数据的库。我们对 `"esp_bt.h"`、`"esp_bt_main.h"`、`"esp_gap_ble_api.h"` 和 `"esp_gatts_api.h"` 特别感兴趣，这些文件暴露了实现此示例所需的BLE API。
+
+- `esp_bt.h`：从主机侧实现BT控制器和VHCI配置程序。
+- `esp_bt_main.h`：实现Bluedroid堆栈的初始化和启用。
+- `esp_gap_ble_api.h`：实现GAP配置，如广告和连接参数。
+- `esp_gatts_api.h`：实现GATT配置，如创建服务和特性。
+
+== 入口函数
+
+入口函数是 `app_main()` 函数。
+
+```c
+ void app_main()
 {
     esp_err_t ret;
 
-    /* Initialize NVS. */
-    /// NVS 就是在 flash 上分配的一块内存空间 ，提供给用户保存掉电不丢失的数据 。
+    // Initialize NVS.
     ret = nvs_flash_init();
-    /// 如果 flash 没有空闲页面，或者发现新的版本，
-    /// 则擦除 flash 并重新初始化。
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    /// 错误检查
     ESP_ERROR_CHECK(ret);
 
-    /// 如果选用BLE模式就要在初始化之前先释放CLASSIC模式的内存。
-    /// 是因为在配置BLE之前会调用esp_bt_controller_init()函数来初始化bt的协议栈，
-    /// 而我们针对bt的初始化用的的内存空间是固定的，那么在调用初始化bt之前先把CLASSIC部分会用到的内存给释放掉，
-    /// 再在初始化bt的时候，初始化函数就会发现CLASSIC这部分的内存被释放掉了，
-    /// 也就不会初始化对应的内容；但是如果在初始化函数之后再去释放CLASSIC对应内存的时候，
-    /// 当然就会发生内存踩踏事件（esp_bt_controller_init()这个函数并不知道你要用BLE还是CLASSIC）。
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
-
-    /// 获取蓝牙的默认配置
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    /// 初始化蓝牙控制器
     ret = esp_bt_controller_init(&bt_cfg);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
+    if (ret) {
+        ESP_LOGE(GATTS_TAG, "%s initialize controller failed\n", __func__);
         return;
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
+    if (ret) {
+        ESP_LOGE(GATTS_TAG, "%s enable controller failed\n", __func__);
         return;
     }
-
     ret = esp_bluedroid_init();
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
+    if (ret) {
+        ESP_LOGE(GATTS_TAG, "%s init bluetooth failed\n", __func__);
         return;
     }
-
     ret = esp_bluedroid_enable();
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(ret));
+    if (ret) {
+        ESP_LOGE(GATTS_TAG, "%s enable bluetooth failed\n", __func__);
         return;
     }
 
     ret = esp_ble_gatts_register_callback(gatts_event_handler);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "gatts register error, error code = %x", ret);
+    if (ret){
+        ESP_LOGE(GATTS_TAG, "gatts register error, error code = %x", ret);
         return;
     }
-
     ret = esp_ble_gap_register_callback(gap_event_handler);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "gap register error, error code = %x", ret);
+    if (ret){
+        ESP_LOGE(GATTS_TAG, "gap register error, error code = %x", ret);
         return;
     }
-
-    ret = esp_ble_gatts_app_register(ESP_APP_ID);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "gatts app register error, error code = %x", ret);
+    ret = esp_ble_gatts_app_register(PROFILE_A_APP_ID);
+    if (ret){
+        ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
         return;
     }
-
-    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(500);
-    if (local_mtu_ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
+    ret = esp_ble_gatts_app_register(PROFILE_B_APP_ID);
+    if (ret){
+        ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
+        return;
     }
+    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(512);
+    if (local_mtu_ret){
+        ESP_LOGE(GATTS_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
+    }
+    return;
 }
+```
+
+主函数首先初始化非易失性存储库。这个库允许在闪存中保存键值对，并被一些组件（如Wi-Fi库）用来保存SSID和密码：
+
+```c
+ret = nvs_flash_init();
+```
+
+== 蓝牙控制器和栈协议初始化(BT Controller and Stack Initialization)
+
+主函数还通过首先创建一个名为 `esp_bt_controller_config_t` 的BT控制器配置结构体来初始化BT控制器，该结构体使用 `BT_CONTROLLER_INIT_CONFIG_DEFAULT()` 宏生成的默认设置。BT控制器在控制器侧实现了主控制器接口（HCI）、链路层（LL）和物理层（PHY）。BT控制器对用户应用程序是不可见的，它处理BLE堆栈的底层。控制器配置包括设置BT控制器堆栈大小、优先级和HCI波特率。使用创建的设置，通过 `esp_bt_controller_init()` 函数初始化并启用BT控制器：
+
+```c
+esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+ret = esp_bt_controller_init(&bt_cfg);
+```
+
+接下来，控制器使能为 BLE 模式。
+
+```c
+ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+```
+
+#info[如果想要使用双模式（BLE + BT），控制器应该使能为 `ESP_BT_MODE_BTDM` 。]
+
+支持四种蓝牙模式：
+
+1. `ESP_BT_MODE_IDLE`：蓝牙未运行
+2. `ESP_BT_MODE_BLE`：BLE模式
+3. `ESP_BT_MODE_CLASSIC_BT`：经典蓝牙模式
+4. `ESP_BT_MODE_BTDM`：双模式（BLE + 经典蓝牙）
+
+在BT控制器初始化之后，Bluedroid堆栈（包括经典蓝牙和BLE的共同定义和API）通过使用以下方式被初始化和启用：
+
+```c
+ret = esp_bluedroid_init();
+ret = esp_bluedroid_enable();
+```
+
+此时程序流程中的蓝牙堆栈已经启动并运行，但应用程序的功能尚未定义。功能是通过响应事件来定义的，例如当另一个设备尝试读取或写入参数并建立连接时会发生什么。两个主要的事件管理器是GAP和GATT事件处理器。应用程序需要为每个事件处理器注册一个回调函数，以便让应用程序知道哪些函数将处理GAP和GATT事件：
+
+```c
+esp_ble_gatts_register_callback(gatts_event_handler);
+esp_ble_gap_register_callback(gap_event_handler);
+```
+
+函数 `gatts_event_handler()` 和 `gap_event_handler()` 处理所有从BLE堆栈推送给应用程序的事件。
+
+== 应用程序配置文件(APPLICATION PROFILES)
+
+如下图所示，GATT服务器示例应用程序通过使用应用程序配置文件来组织。每个应用程序配置文件描述了一种分组功能的方式，这些功能是为一个客户端应用程序设计的，例如在智能手机或平板电脑上运行的移动应用。通过这种方式，单一设计，通过不同的应用程序配置文件启用，可以在被不同的智能手机应用使用时表现出不同的行为，允许服务器根据正在使用的客户端应用程序做出不同的反应。实际上，每个配置文件被客户端视为一个独立的BLE服务。客户端可以自行区分它感兴趣的服务。
+
+#figure(image("GATT_Server_Figure_1.png", width: 80%), caption: [GATT服务器])
+
+每个配置文件都定义为一个结构体，其中结构体成员取决于在该应用程序配置文件中实现的服务和特性。成员还包括一个GATT接口、应用程序ID、连接ID和一个回调函数来处理配置文件事件。在这个示例中，每个配置文件由以下组成：
+
+- GATT接口
+- 应用程序ID
+- 连接ID
+- 服务句柄
+- 服务ID
+- 特性句柄
+- 特性UUID
+- 属性权限
+- 特性属性
+- 客户端特性配置描述符句柄
+- 客户端特性配置描述符UUID
+
+从这个结构中可以看出，这个配置文件被设计为拥有一个服务和一个特性，并且该特性有一个描述符。服务有一个句柄和一个ID，同样每个特性都有一个句柄、一个UUID、属性权限和属性。此外，如果特性支持通知或指示，则必须实现一个客户端特性配置描述符（CCCD），这是一个额外的属性，描述通知或指示是否启用，并定义特性如何被特定客户端配置。这个描述符也有一个句柄和一个UUID。
+
+结构实现是：
+
+```c
+struct gatts_profile_inst {
+    esp_gatts_cb_t gatts_cb;
+    uint16_t gatts_if;
+    uint16_t app_id;
+    uint16_t conn_id;
+    uint16_t service_handle;
+    esp_gatt_srvc_id_t service_id;
+    uint16_t char_handle;
+    esp_bt_uuid_t char_uuid;
+    esp_gatt_perm_t perm;
+    esp_gatt_char_prop_t property;
+    uint16_t descr_handle;
+    esp_bt_uuid_t descr_uuid;
+};
+```
+
+应用程序配置文件存储在一个数组中，并分配了相应的回调函数 `gatts_profile_a_event_handler()` 和 `gatts_profile_b_event_handler()`。GATT客户端上的不同应用程序使用不同的接口，由 `gatts_if` 参数表示。对于初始化，此参数设置为 `ESP_GATT_IF_NONE`，意味着应用程序配置文件尚未链接到任何客户端。
+
+```c
+static struct gatts_profile_inst gl_profile_tab[PROFILE_NUM] = {
+    [PROFILE_A_APP_ID] = {
+        .gatts_cb = gatts_profile_a_event_handler,
+        .gatts_if = ESP_GATT_IF_NONE,
+    [PROFILE_B_APP_ID] = {
+        .gatts_cb = gatts_profile_b_event_handler,
+        .gatts_if = ESP_GATT_IF_NONE,
+    },
+};
+```
+
+最后，使用应用程序ID注册应用程序配置文件，这是一个用户分配的数字，用于标识每个配置文件。通过这种方式，一个服务器可以运行多个应用程序配置文件。
+
+```c
+esp_ble_gatts_app_register(PROFILE_A_APP_ID);
+esp_ble_gatts_app_register(PROFILE_B_APP_ID);
+```
+
+== 配置 GAP 参数
+
+注册应用程序事件是在程序生命周期中首先触发的事件，这个示例使用Profile A GATT事件句柄在注册时配置广告参数。这个示例提供了使用标准蓝牙核心规范广告参数或自定义原始缓冲区的选项。可以通过 `CONFIG_SET_RAW_ADV_DATA` 定义来选择此选项。原始广告数据可用于实现iBeacons、Eddystone或其他专有和自定义帧类型，如用于室内定位服务的那些，这些与标准规范不同。
+
+用于配置标准蓝牙规范广告参数的函数是 `esp_ble_gap_config_adv_data()`，它接受一个指向 `esp_ble_adv_data_t` 结构的指针。广告数据的 `esp_ble_adv_data_t` 数据结构定义如下：
+
+```c
+typedef struct {
+    bool set_scan_rsp;            /*!< Set this advertising data as scan response or not*/
+    bool include_name;            /*!< Advertising data include device name or not */
+    bool include_txpower;         /*!< Advertising data include TX power */
+    int min_interval;             /*!< Advertising data show slave preferred connection min interval */
+    int max_interval;             /*!< Advertising data show slave preferred connection max interval */
+    int appearance;               /*!< External appearance of device */
+    uint16_t manufacturer_len;    /*!< Manufacturer data length */
+    uint8_t *p_manufacturer_data; /*!< Manufacturer data point */
+    uint16_t service_data_len;    /*!< Service data length */
+    uint8_t *p_service_data;      /*!< Service data point */
+    uint16_t service_uuid_len;    /*!< Service uuid length */
+    uint8_t *p_service_uuid;      /*!< Service uuid array point */
+    uint8_t flag;                 /*!< Advertising flag of discovery mode, see BLE_ADV_DATA_FLAG detail */
+} esp_ble_adv_data_t;
+```
+
+在本示例程序中，参数被初始化为以下：
+
+```c
+static esp_ble_adv_data_t adv_data = {
+    .set_scan_rsp = false,
+    .include_name = true,
+    .include_txpower = true,
+    .min_interval = 0x0006,
+    .max_interval = 0x0010,
+    .appearance = 0x00,
+    .manufacturer_len = 0, //TEST_MANUFACTURER_DATA_LEN,
+    .p_manufacturer_data =  NULL, //&test_manufacturer[0],
+    .service_data_len = 0,
+    .p_service_data = NULL,
+    .service_uuid_len = 32,
+    .p_service_uuid = test_service_uuid128,
+    .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
+};
+```
+
+最小和最大从设备首选连接间隔以1.25毫秒为单位设置。在这个示例中，最小从设备首选连接间隔定义为 `0x0006 * 1.25毫秒 = 7.5毫秒` ，最大从设备首选连接间隔初始化为 `0x0010 * 1.25毫秒 = 20毫秒` 。
+
+广告负载可以包含多达31字节的数据。参数数据可能足够大，以至于超过31字节的广告包限制，这会导致栈切割广告包并留下部分参数。如果取消注释制造商长度和数据，这种行为可以在这个示例中展示，这会导致服务在重新编译和测试后不被广告。
+
+也可以使用 `esp_ble_gap_config_adv_data_raw()` 和 `esp_ble_gap_config_scan_rsp_data_raw()` 函数来广告自定义原始数据，这要求创建并传递一个缓冲区，用于广告数据和扫描响应数据。在这个示例中，原始数据由 `raw_adv_data[]` 和 `raw_scan_rsp_data[]` 数组表示。
+
+最后，使用 `esp_ble_gap_set_device_name()` 函数设置设备名称。注册事件处理程序如下所示：
+
+```c
+static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
+    switch (event) {
+    case ESP_GATTS_REG_EVT:
+         ESP_LOGI(GATTS_TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.is_primary = true;
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.inst_id = 0x00;
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID_TEST_A;
+
+         esp_ble_gap_set_device_name(TEST_DEVICE_NAME);
+#ifdef CONFIG_SET_RAW_ADV_DATA
+        esp_err_t raw_adv_ret = esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
+        if (raw_adv_ret){
+            ESP_LOGE(GATTS_TAG, "config raw adv data failed, error code = %x ", raw_adv_ret);
+        }
+        adv_config_done |= adv_config_flag;
+        esp_err_t raw_scan_ret = esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
+        if (raw_scan_ret){
+            ESP_LOGE(GATTS_TAG, "config raw scan rsp data failed, error code = %x", raw_scan_ret);
+        }
+        adv_config_done |= scan_rsp_config_flag;
+#else
+        //config adv data
+        esp_err_t ret = esp_ble_gap_config_adv_data(&adv_data);
+        if (ret){
+            ESP_LOGE(GATTS_TAG, "config adv data failed, error code = %x", ret);
+        }
+        adv_config_done |= adv_config_flag;
+        //config scan response data
+        ret = esp_ble_gap_config_adv_data(&scan_rsp_data);
+        if (ret){
+            ESP_LOGE(GATTS_TAG, "config scan response data failed, error code = %x", ret);
+        }
+        adv_config_done |= scan_rsp_config_flag;
+#endif
+```
+
+== GAP Event Handler(GAP事件句柄)
+
+一旦设置了广告数据，GAP事件 `ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT` 将被触发。对于设置原始广告数据的情况，触发的事件是 `ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT`。另外，当设置了原始扫描响应数据时，将触发 `ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT` 事件。
+
+```c
+static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
+{   
+    switch (event) {
+#ifdef CONFIG_SET_RAW_ADV_DATA
+    case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
+         adv_config_done &= (~adv_config_flag);
+         if (adv_config_done==0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+    case ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT:
+         adv_config_done &= (~scan_rsp_config_flag);
+         if (adv_config_done==0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+#else
+    case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
+         adv_config_done &= (~adv_config_flag);
+         if (adv_config_done == 0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+    case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
+         adv_config_done &= (~scan_rsp_config_flag);
+         if (adv_config_done == 0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+#endif
+...
+...
+```
+
+无论哪种情况，服务器都可以使用 `esp_ble_gap_start_advertising()` 函数开始广告，该函数接受一个类型为 `esp_ble_adv_params_t` 的结构体，其中包含了堆栈操作所需的广告参数：
+
+```c
+/// Advertising parameters
+typedef struct {
+    uint16_t adv_int_min;
+    /*!< Minimum advertising interval for undirected and low duty cycle directed advertising.
+ 					Range: 0x0020 to 0x4000
+ 					Default: N = 0x0800 (1.28 second)
+					Time = N * 0.625 msec
+					Time Range: 20 ms to 10.24 sec */
+    uint16_t adv_int_max;
+    /*!< Maximum advertising interval for undirected and low duty cycle directed advertising.
+					Range: 0x0020 to 0x4000
+					Default: N = 0x0800 (1.28 second)
+					Time = N * 0.625 msec
+					Time Range: 20 ms to 10.24 sec */
+    esp_ble_adv_type_t adv_type;            /*!< Advertising type */
+    esp_ble_addr_type_t own_addr_type;      /*!< Owner bluetooth device address type */
+    esp_bd_addr_t peer_addr;                /*!< Peer device bluetooth device address */
+    esp_ble_addr_type_t peer_addr_type;     /*!< Peer device bluetooth device address type */
+    esp_ble_adv_channel_t channel_map;      /*!< Advertising channel map */
+    esp_ble_adv_filter_t adv_filter_policy; /*!< Advertising filter policy */
+}
+esp_ble_adv_params_t;
+```
+
+请注意，`esp_ble_gap_config_adv_data()` 配置将要广告给客户端的数据，并接受一个 `esp_ble_adv_data_t` 结构体，而 `esp_ble_gap_start_advertising()` 使服务器实际开始广告，并接受一个 `esp_ble_adv_params_t` 结构体。广告数据是显示给客户端的信息，而广告参数是GAP执行所需的配置。
+
+对于这个示例，广告参数如下初始化：
+
+```c
+static esp_ble_adv_params_t test_adv_params = {
+    .adv_int_min        = 0x20,
+    .adv_int_max        = 0x40,
+    .adv_type           = ADV_TYPE_IND,
+    .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
+    //.peer_addr        =
+    //.peer_addr_type   =
+    .channel_map        = ADV_CHNL_ALL,
+    .adv_filter_policy  = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
+};
+```
+
+这些参数将广告间隔配置在40毫秒到80毫秒之间。广告类型为`ADV_IND`，这是一种通用的、不针对特定中央设备的可连接类型。地址类型为公开，使用所有频道，并允许来自任何中央设备的扫描和连接请求。
+
+如果广告成功开始，将生成一个`ESP_GAP_BLE_ADV_START_COMPLETE_EVT`事件，在这个示例中用于检查广告状态是否确实为正在广告。否则，将打印一个错误消息。
+
+```c
+...
+...
+    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+    //advertising start complete event to indicate advertising start successfully or failed
+         if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
+             ESP_LOGE(GATTS_TAG, "Advertising start failed\n");
+         }
+         break;
+...
+...
 ```
