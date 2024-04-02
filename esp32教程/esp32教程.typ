@@ -1572,9 +1572,174 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 
 == 创建服务
 
+注册事件还用于通过使用`esp_ble_gatts_create_service()`创建服务。当服务创建完成时，会调用回调事件ESP_GATTS_CREATE_EVT来向配置文件报告状态和服务ID。创建服务的方式是：
+
+```c
+...
+...
+esp_ble_gatts_create_service(gatts_if, &gl_profile_tab[PROFILE_A_APP_ID].service_id, GATTS_NUM_HANDLE_TEST_A);
+break;
+...
+...
+```
+
+句柄的数量定义为 4 ：
+
+```c
+#define GATTS_NUM_HANDLE_TEST_A     4
+```
+
+句柄如下：
+
+1. 服务句柄
+2. 特征句柄
+3. 特征值句柄
+4. 特征描述符句柄
+
+服务被定义为一个具有16位UUID长度的主服务。服务ID使用实例ID = 0初始化，并通过`GATTS_SERVICE_UUID_TEST_A`定义UUID。
+
+服务实例ID可以用来区分具有相同UUID的多个服务。在这个示例中，由于每个应用程序配置文件只有一个服务，并且服务具有不同的UUID，所以在配置文件A和B中服务实例ID都可以定义为0。然而，如果只有一个应用程序配置文件，使用相同UUID的两个服务，则需要使用不同的实例ID来区分这两个服务。
+
+应用程序配置文件B以与配置文件A相同的方式创建服务：
+
+```c
+static void gatts_profile_b_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
+    switch (event) {
+    case ESP_GATTS_REG_EVT:
+         ESP_LOGI(GATTS_TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.is_primary = true;
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.inst_id = 0x00;
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID_TEST_B;
+
+         esp_ble_gatts_create_service(gatts_if, &gl_profile_tab[PROFILE_B_APP_ID].service_id, GATTS_NUM_HANDLE_TEST_B);
+         break;
+...
+...
+}
+```
+
 == 启动服务和创建特征(Characteristics)
 
+当一个服务成功创建时，由配置文件GATT处理器管理的`ESP_GATTS_CREATE_EVT`事件将被触发，可以用来启动服务并向服务中添加特性。对于配置文件A的情况，服务被启动并且特性被添加如下：
+
+```c
+case ESP_GATTS_CREATE_EVT:
+     ESP_LOGI(GATTS_TAG, "CREATE_SERVICE_EVT, status %d, service_handle %d\n", param->create.status, param->create.service_handle);
+     gl_profile_tab[PROFILE_A_APP_ID].service_handle = param->create.service_handle;
+     gl_profile_tab[PROFILE_A_APP_ID].char_uuid.len = ESP_UUID_LEN_16;
+     gl_profile_tab[PROFILE_A_APP_ID].char_uuid.uuid.uuid16 = GATTS_CHAR_UUID_TEST_A;  
+
+     esp_ble_gatts_start_service(gl_profile_tab[PROFILE_A_APP_ID].service_handle);
+     a_property = ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
+     esp_err_t add_char_ret =  
+     esp_ble_gatts_add_char(gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
+                            &gl_profile_tab[PROFILE_A_APP_ID].char_uuid,  
+                            ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
+                            a_property,  
+                            &gatts_demo_char1_val,  
+                            NULL);
+    if (add_char_ret){
+        ESP_LOGE(GATTS_TAG, "add char failed, error code =%x",add_char_ret);
+    }
+    break;
+```
+
+首先，由BLE堆栈生成的服务句柄被存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特性的UUID及其UUID长度。特性UUID的长度再次为16位。使用之前生成的服务句柄，通过`esp_ble_gatts_start_service()`函数启动服务。触发了一个`ESP_GATTS_START_EVT`事件，用于打印信息。特性通过`esp_ble_gatts_add_char()`函数添加到服务中，结合特性的权限和属性。在这个示例中，两个配置文件中的特性都按以下方式设置：
+
+权限：
+
+- `ESP_GATT_PERM_READ`：允许读取特性值
+- `ESP_GATT_PERM_WRITE`：允许写入特性值
+
+属性：
+
+- `ESP_GATT_CHAR_PROP_BIT_READ`：特性可以被读取
+- `ESP_GATT_CHAR_PROP_BIT_WRITE`：特性可以被写入
+- `ESP_GATT_CHAR_PROP_BIT_NOTIFY`：特性可以通知值变化
+
+对于读和写拥有权限和属性可能看起来有些多余。然而，属性的读写属性是显示给客户端的信息，以便让客户端知道服务器是否接受读写请求。从这个意义上讲，属性作为一个提示，帮助客户端正确访问服务器资源。另一方面，权限是授予客户端读取或写入该属性的授权。例如，如果客户端尝试写入一个它没有写权限的属性，服务器将拒绝该请求，即使设置了写属性。
+
+此外，这个示例给特性赋予了一个初始值，由`gatts_demo_char1_val`表示。初始值定义如下：
+
+```c
+esp_attr_value_t gatts_demo_char1_val =
+{
+    .attr_max_len = GATTS_DEMO_CHAR_VAL_LEN_MAX,
+    .attr_len     = sizeof(char1_str),
+    .attr_value   = char1_str,
+};
+```
+这里 `char1_str` 是占位数据，没啥用
+
+```c
+uint8_t char1_str[] = {0x11,0x22,0x33};
+```
+
+and the characteristic length is defined as:
+
+```c
+#define GATTS_DEMO_CHAR_VAL_LEN_MAX 0x40
+```
+
+特性的初始值必须是一个非空对象，并且特性长度必须始终大于零，否则堆栈将返回错误。
+
+最后，特性被配置为每次读取或写入特性时都需要手动发送响应，而不是让堆栈自动响应。这是通过设置`esp_ble_gatts_add_char()`函数的最后一个参数，代表属性响应控制参数，为`ESP_GATT_RSP_BY_APP`或NULL来配置的。
+
 == 创建特征描述符
+
+向服务添加特性会触发一个`ESP_GATTS_ADD_CHAR_EVT`事件，该事件返回堆栈为刚添加的特性生成的句柄。该事件包括以下参数：
+
+```c
+esp_gatt_status_t status;          /*!< Operation status */
+uint16_t attr_handle;	           /*!< Characteristic attribute handle */
+uint16_t service_handle;           /*!< Service attribute handle */
+esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
+```
+
+事件返回的属性句柄被存储在配置文件表中，同时也设置了特性描述符的长度和UUID。使用`esp_ble_gatts_get_attr_value()`函数读取特性的长度和值，然后出于信息目的打印出来。最后，使用`esp_ble_gatts_add_char_descr()`函数添加特性描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值和自动响应设置。特性描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
+
+```c
+    case ESP_GATTS_ADD_CHAR_EVT: {
+         uint16_t length = 0;
+         const uint8_t *prf_char;
+
+         ESP_LOGI(GATTS_TAG, "ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d\n",
+                 param->add_char.status, param->add_char.attr_handle, param->add_char.service_handle);  
+                 gl_profile_tab[PROFILE_A_APP_ID].char_handle = param->add_char.attr_handle;
+                 gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.len = ESP_UUID_LEN_16;  
+                 gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.uuid.uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;  
+                 esp_err_t get_attr_ret = esp_ble_gatts_get_attr_value(param->add_char.attr_handle, &length, &prf_char);         
+         if (get_attr_ret == ESP_FAIL){  
+	           ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
+         }
+         ESP_LOGI(GATTS_TAG, "the gatts demo char length = %x\n", length);
+         for(int i = 0; i < length; i++){
+             ESP_LOGI(GATTS_TAG, "prf_char[%x] = %x\n",i,prf_char[i]);
+         }       
+         esp_err_t add_descr_ret = esp_ble_gatts_add_char_descr(  
+                                 gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
+                                 &gl_profile_tab[PROFILE_A_APP_ID].descr_uuid,  
+                                 ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
+                                 NULL,NULL);
+         if (add_descr_ret){
+            ESP_LOGE(GATTS_TAG, "add char descr failed, error code = %x", add_descr_ret);
+         }
+         break;
+    }
+```
+
+一旦添加了描述符，就会触发`ESP_GATTS_ADD_CHAR_DESCR_EVT`事件，在本示例中用于打印一条信息消息。
+
+```c
+    case ESP_GATTS_ADD_CHAR_DESCR_EVT:
+         ESP_LOGI(GATTS_TAG, "ADD_DESCR_EVT, status %d, attr_handle %d, service_handle %d\n",
+                  param->add_char.status, param->add_char.attr_handle,  
+                  param->add_char.service_handle);
+         break;
+```
+
+这个过程在配置文件B的事件处理器中重复，以便为该配置文件创建服务和特性。
 
 == 连接事件
 
