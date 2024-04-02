@@ -1635,24 +1635,30 @@ static void gatts_profile_b_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
 
 ```c
 case ESP_GATTS_CREATE_EVT:
-     ESP_LOGI(GATTS_TAG, "CREATE_SERVICE_EVT, status %d, service_handle %d\n", param->create.status, param->create.service_handle);
-     gl_profile_tab[PROFILE_A_APP_ID].service_handle = param->create.service_handle;
-     gl_profile_tab[PROFILE_A_APP_ID].char_uuid.len = ESP_UUID_LEN_16;
-     gl_profile_tab[PROFILE_A_APP_ID].char_uuid.uuid.uuid16 = GATTS_CHAR_UUID_TEST_A;  
+  ESP_LOGI(GATTS_TAG, "CREATE_SERVICE_EVT, status %d, service_handle %d\n", param->create.status, param->create.service_handle);
+  gl_profile_tab[PROFILE_A_APP_ID].service_handle = param->create.service_handle;
+  gl_profile_tab[PROFILE_A_APP_ID].char_uuid.len = ESP_UUID_LEN_16;
+  gl_profile_tab[PROFILE_A_APP_ID].char_uuid.uuid.uuid16 = GATTS_CHAR_UUID_TEST_A;  
 
-     esp_ble_gatts_start_service(gl_profile_tab[PROFILE_A_APP_ID].service_handle);
-     a_property = ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
-     esp_err_t add_char_ret =  
-     esp_ble_gatts_add_char(gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
-                            &gl_profile_tab[PROFILE_A_APP_ID].char_uuid,  
-                            ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
-                            a_property,  
-                            &gatts_demo_char1_val,  
-                            NULL);
-    if (add_char_ret){
-        ESP_LOGE(GATTS_TAG, "add char failed, error code =%x",add_char_ret);
-    }
-    break;
+  esp_ble_gatts_start_service(
+    gl_profile_tab[PROFILE_A_APP_ID].service_handle
+  );
+  a_property = ESP_GATT_CHAR_PROP_BIT_READ
+             | ESP_GATT_CHAR_PROP_BIT_WRITE
+             | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
+  esp_err_t add_char_ret = esp_ble_gatts_add_char(
+    gl_profile_tab[PROFILE_A_APP_ID].service_handle,
+    &gl_profile_tab[PROFILE_A_APP_ID].char_uuid,
+    ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+    a_property,
+    &gatts_demo_char1_val,
+    NULL
+  );
+  if (add_char_ret)
+  {
+    ESP_LOGE(GATTS_TAG, "add char failed, error code =%x",add_char_ret);
+  }
+  break;
 ```
 
 首先，由 BLE 堆栈生成的服务句柄被存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特性的 UUID 及其 UUID 长度。特性 UUID 的长度再次为16位。使用之前生成的服务句柄，通过 `esp_ble_gatts_start_service()` 函数启动服务。触发了一个 `ESP_GATTS_START_EVT` 事件，用于打印信息。特性通过 `esp_ble_gatts_add_char()` 函数添加到服务中，结合特性的权限和属性。在这个示例中，两个配置文件中的特性都按以下方式设置：
@@ -1710,33 +1716,34 @@ esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
 事件返回的属性句柄被存储在配置文件表中，同时也设置了特性描述符的长度和 UUID 。使用`esp_ble_gatts_get_attr_value()`函数读取特性的长度和值，然后出于信息目的打印出来。最后，使用`esp_ble_gatts_add_char_descr()`函数添加特性描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值和自动响应设置。特性描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
 
 ```c
-    case ESP_GATTS_ADD_CHAR_EVT: {
-         uint16_t length = 0;
-         const uint8_t *prf_char;
+case ESP_GATTS_ADD_CHAR_EVT: {
+  uint16_t length = 0;
+  const uint8_t *prf_char;
 
-         ESP_LOGI(GATTS_TAG, "ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d\n",
+  ESP_LOGI(GATTS_TAG, "ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d\n",
                  param->add_char.status, param->add_char.attr_handle, param->add_char.service_handle);  
                  gl_profile_tab[PROFILE_A_APP_ID].char_handle = param->add_char.attr_handle;
                  gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.len = ESP_UUID_LEN_16;  
                  gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.uuid.uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;  
                  esp_err_t get_attr_ret = esp_ble_gatts_get_attr_value(param->add_char.attr_handle, &length, &prf_char);         
-         if (get_attr_ret == ESP_FAIL){  
-	           ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
-         }
-         ESP_LOGI(GATTS_TAG, "the gatts demo char length = %x\n", length);
-         for(int i = 0; i < length; i++){
-             ESP_LOGI(GATTS_TAG, "prf_char[%x] = %x\n",i,prf_char[i]);
-         }       
-         esp_err_t add_descr_ret = esp_ble_gatts_add_char_descr(  
-                                 gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
-                                 &gl_profile_tab[PROFILE_A_APP_ID].descr_uuid,  
-                                 ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
-                                 NULL,NULL);
-         if (add_descr_ret){
-            ESP_LOGE(GATTS_TAG, "add char descr failed, error code = %x", add_descr_ret);
-         }
-         break;
-    }
+  if (get_attr_ret == ESP_FAIL) {  
+    ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
+  }
+  ESP_LOGI(GATTS_TAG, "the gatts demo char length = %x\n", length);
+  for (int i = 0; i < length; i++) {
+    ESP_LOGI(GATTS_TAG, "prf_char[%x] = %x\n",i,prf_char[i]);
+  }       
+  esp_err_t add_descr_ret = esp_ble_gatts_add_char_descr(  
+    gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
+    &gl_profile_tab[PROFILE_A_APP_ID].descr_uuid,  
+    ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
+    NULL, NULL
+  );
+  if (add_descr_ret) {
+    ESP_LOGE(GATTS_TAG, "add char descr failed, error code = %x", add_descr_ret);
+  }
+  break;
+}
 ```
 
 一旦添加了描述符，就会触发`ESP_GATTS_ADD_CHAR_DESCR_EVT`事件，在本示例中用于打印一条信息消息。
