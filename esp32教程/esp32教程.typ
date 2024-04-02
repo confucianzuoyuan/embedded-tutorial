@@ -1842,7 +1842,7 @@ case ESP_GATTS_READ_EVT: {
 
 == 管理写事件
 
-The write events are represented by the `ESP_GATTS_WRITE_EVT` event, which has the following parameters:
+写事件由`ESP_GATTS_WRITE_EVT`事件表示，该事件具有以下参数：
 
 ```c
 uint16_t conn_id;         /*!< Connection id */
@@ -1856,9 +1856,9 @@ uint16_t len;             /*!< The write attribute value length */
 uint8_t *value;           /*!< The write attribute value */
 ```
 
-There are two types of write events implemented in this example, write characteristic value and write long characteristic value. The first type of write is used when the characteristic value can fit in one Attribute Protocol Maximum Transmission Unit (ATT MTU), which is usually 23 bytes long. The second type is used when the attribute to write is longer than what can be sent in one single ATT message by dividing the data into multiple chunks using Prepare Write Responses, after which an Executive Write Request is used to confirm or cancel the complete write request. This behavior is defined in the [Bluetooth Specification Version 4.2](https://www.bluetooth.com/specifications/bluetooth-core-specification), Vol 3, Part G, section 4.9. The write long characteristic message flow is shown in the figure below.
+在这个示例中实现了两种类型的写事件，写特性值和写长特性值。第一种类型的写操作用于当特性值可以适应一个属性协议最大传输单元（ATT MTU），通常是23字节长的情况。第二种类型用于当要写入的属性长度超过可以在一个单独的ATT消息中发送的长度时，通过使用准备写响应将数据分成多个块，之后使用执行写请求来确认或取消完整的写请求。这种行为在#link("https://www.bluetooth.com/specifications/bluetooth-core-specification")[蓝牙规范版本4.2]，卷3，第G部分，第4.9节中定义。下图展示了写长特性消息流程。
 
-When a write event is triggered, this example prints logging messages, and then executes the `example_write_event_env()` function.
+当触发写事件时，这个示例会打印日志消息，然后执行`example_write_event_env()`函数。
 
 ```c
 case ESP_GATTS_WRITE_EVT: {                          
@@ -1911,7 +1911,7 @@ case ESP_GATTS_WRITE_EVT: {
 
 #figure(image("GATT_Server_Figure_2.png", width: 80%), caption: [离线安装包示意图])
 
-The `example_write_event_env()` function contains the logic for the write long characteristic procedure:
+`example_write_event_env()`函数包含了写长特性过程的逻辑：
 
 ```c
 void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
@@ -1961,7 +1961,7 @@ void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare
 }
 ```
 
-When the client sends a Write Request or a Prepare Write Request, the server shall respond. However, if the client sends a Write Without Response command, the server does not need to reply back a response. This is checked in the write procedure by examining the value of the `write.need_rsp parameter`. If a response is needed, the procedure continues doing the response preparation, if not present, the client does not need a response and therefore the procedure is ended.
+当客户端发送写请求或准备写请求时，服务器应当响应。然而，如果客户端发送一个不需要响应的写命令，服务器不需要回复响应。这通过检查`write.need_rsp`参数的值在写过程中进行检查。如果需要响应，程序继续进行响应准备；如果不存在，客户端不需要响应，因此程序结束。
 
 ```c
 void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env,  
@@ -1971,19 +1971,19 @@ void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare
 …
 ```
 
-The function then checks if the Prepare Write Request parameter represented by the `write.is_prep` is set, which means that the client is requesting a Write Long Characteristic. If present, the procedure continues with the preparation of multiple write responses, if not present, then the server simply sends a single write response back.
+然后，函数检查由`write.is_prep`表示的准备写请求参数是否被设置，这意味着客户端正在请求一个长特性写操作。如果存在，程序继续准备多个写响应；如果不存在，那么服务器简单地发送回一个单一的写响应。
 
 ```c
-…
+...
 if (param->write.is_prep){
-…
+...
 }else{
 	esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
 }
-…
+...
 ```
 
-To handle long characteristic write, a prepare buffer structure is defined and instantiated:
+为了处理长特性写操作，定义并实例化了一个准备缓冲区结构：
 
 ```c
 typedef struct {
@@ -1994,7 +1994,8 @@ typedef struct {
 static prepare_type_env_t a_prepare_write_env;
 static prepare_type_env_t b_prepare_write_env;
 ```
-In order to use the prepare buffer, some memory space is allocated for it. In case the allocation fails due to a lack of memory, an error is printed:
+
+为了使用准备缓冲区，为其分配了一些内存空间。如果由于内存不足导致分配失败，将打印一个错误：
 
 ```c
 if (prepare_write_env->prepare_buf == NULL) {
@@ -2008,7 +2009,7 @@ if (prepare_write_env->prepare_buf == NULL) {
 }
 ```
 
-If the buffer is not NULL, which means initialization completed, the procedure then checks if the offset and message length of the incoming write fit the buffer.
+如果缓冲区不是NULL，这意味着初始化完成，程序然后检查传入写操作的偏移量和消息长度是否适合该缓冲区。
 
 ```c
 else {
@@ -2021,7 +2022,7 @@ else {
 }
 ```
 
-The procedure now prepares the response of type `esp_gatt_rsp_t` to be sent back to the client. The response it constructed using the same parameters of the write request, such as length, handle and offset. In addition, the GATT authentication type needed to write to this characteristic is set with `ESP_GATT_AUTH_REQ_NONE`, which means that the client can write to this characteristic without needing to authenticate first. Once the response is sent, the memory allocated for its use is freed.
+程序现在准备要发送回客户端的类型为`esp_gatt_rsp_t`的响应。响应是使用写请求的相同参数构造的，如长度、句柄和偏移量。此外，设置了写入此特性所需的GATT认证类型为`ESP_GATT_AUTH_REQ_NONE`，这意味着客户端可以在不需要先进行认证的情况下写入此特性。一旦响应被发送，为其使用而分配的内存被释放。
 
 ```c
 esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
@@ -2040,7 +2041,8 @@ if (status != ESP_GATT_OK){
 	return;
 }
 ```
-Finally, the incoming data is copied to the buffer created and its length is incremented by the offset:
+
+最后，传入的数据被复制到创建的缓冲区中，并且其长度通过偏移量增加：
 
 ```c
 memcpy(prepare_write_env->prepare_buf + param->write.offset,
@@ -2048,7 +2050,8 @@ memcpy(prepare_write_env->prepare_buf + param->write.offset,
        param->write.len);
 prepare_write_env->prepare_len += param->write.len;
 ```
-The client finishes the long write sequence by sending an Executive Write Request. This command triggers an `ESP_GATTS_EXEC_WRITE_EVT` event. The server handles this event by sending a response and executing the `example_exec_write_event_env()` function:
+
+客户端通过发送执行写请求来完成长写序列。这个命令触发一个`ESP_GATTS_EXEC_WRITE_EVT`事件。服务器通过发送响应并执行`example_exec_write_event_env()`函数来处理这个事件：
 
 ```c
 case ESP_GATTS_EXEC_WRITE_EVT:  
@@ -2057,7 +2060,8 @@ case ESP_GATTS_EXEC_WRITE_EVT:
      example_exec_write_event_env(&a_prepare_write_env, param);  
      break;
 ```
-Let’s take a look at the Executive Write function:
+
+我们看一下写函数的执行函数
 
 ```c
 void example_exec_write_event_env(prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
@@ -2075,7 +2079,7 @@ void example_exec_write_event_env(prepare_type_env_t *prepare_write_env, esp_ble
 }
 ```
 
-The executive write is used to either confirm or cancel the write procedure done before, by the Long Characteristic Write procedure. In order to do this, the function checks for the `exec_write_flag` in the parameters received with the event. If the flag equals the execute flag represented by `exec_write_flag`, the write is confirmed and the buffer is printed in the log; if not, then it means the write is canceled and all the data that has been written is deleted.
+执行写操作用于通过长特性写过程确认或取消之前完成的写操作。为了做到这一点，函数检查在事件接收到的参数中的`exec_write_flag`。如果标志等于由`exec_write_flag`表示的执行标志，写操作被确认，并且缓冲区内容将被打印在日志中；如果不是，则意味着写操作被取消，所有已写入的数据将被删除。
 
 ```c
 if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC){  
@@ -2087,7 +2091,8 @@ else{
     ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
  }
 ```
-Finally, the buffer structure that was created to store the chunks of data from the long write operation is freed and its pointer is set to NULL to leave it ready for the next long write procedure.
+
+最后，为了存储来自长写操作的数据块而创建的缓冲区结构被释放，其指针被设置为NULL，以便为下一个长写过程做好准备。
 
 ```c
 if (prepare_write_env->prepare_buf) {
@@ -2098,3 +2103,5 @@ prepare_write_env->prepare_len = 0;
 ```
 
 == 总结
+
+在本文档中，我们详细介绍了GATT服务器示例代码的每个部分。该应用程序是围绕应用程序配置文件的概念设计的。此外，还解释了此示例用于注册事件处理程序的程序。事件遵循一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。最后，解释了如何处理读写事件，包括通过将写操作分割成可以适应属性协议消息的块来处理长特性写入。
