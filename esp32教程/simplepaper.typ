@@ -67,7 +67,7 @@
   )
 
   // Main body
-  set par(first-line-indent: 2em)
+  set par(first-line-indent: 2em, justify: true)
   set enum(indent: 2em)
   set figure(gap: 0.8cm)
 

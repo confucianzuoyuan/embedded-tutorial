@@ -1,0 +1,210 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.2 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{nty/global//global/global}
+    \entry{en2}{article}{}
+      \name{author}{2}{}{%
+        {{hash=4df39853648cdbcc8d7b8eb4d3115176}{%
+           family={Carlstrom},
+           familyi={C\bibinitperiod},
+           given={Charles\bibnamedelima T},
+           giveni={C\bibinitperiod\bibinitdelim T\bibinitperiod}}}%
+        {{hash=9b3c23aa4b7753dd26925556d6774df1}{%
+           family={Fuerst},
+           familyi={F\bibinitperiod},
+           given={Timothy\bibnamedelima S},
+           giveni={T\bibinitperiod\bibinitdelim S\bibinitperiod}}}%
+      }
+      \strng{namehash}{b7ff4e779efc9989a56e60a7115facaa}
+      \strng{fullhash}{b7ff4e779efc9989a56e60a7115facaa}
+      \strng{bibnamehash}{b7ff4e779efc9989a56e60a7115facaa}
+      \strng{authorbibnamehash}{b7ff4e779efc9989a56e60a7115facaa}
+      \strng{authornamehash}{b7ff4e779efc9989a56e60a7115facaa}
+      \strng{authorfullhash}{b7ff4e779efc9989a56e60a7115facaa}
+      \field{sortinit}{C}
+      \field{sortinithash}{4d103a86280481745c9c897c925753c0}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{issn}{0002-8282}
+      \field{journaltitle}{The American Economic Review}
+      \field{title}{{Agency Costs, Net Worth, and Business Fluctuations: A Computable General Equilibrium Analysis}}
+      \field{type}{Journal Article}
+      \field{year}{1997}
+      \field{pages}{893\bibrangedash 910}
+      \range{pages}{18}
+    \endentry
+    \entry{cn1}{article}{}
+      \name{author}{1}{}{%
+        {{hash=abf513d50939c4aa48d6608021f3ab8a}{%
+           family={方军雄},
+           familyi={方\bibinitperiod}}}%
+      }
+      \strng{namehash}{abf513d50939c4aa48d6608021f3ab8a}
+      \strng{fullhash}{abf513d50939c4aa48d6608021f3ab8a}
+      \strng{bibnamehash}{abf513d50939c4aa48d6608021f3ab8a}
+      \strng{authorbibnamehash}{abf513d50939c4aa48d6608021f3ab8a}
+      \strng{authornamehash}{abf513d50939c4aa48d6608021f3ab8a}
+      \strng{authorfullhash}{abf513d50939c4aa48d6608021f3ab8a}
+      \field{sortinit}{f}
+      \field{sortinithash}{2638baaa20439f1b5a8f80c6c08a13b4}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{issn}{0577-9154}
+      \field{journaltitle}{经济研究}
+      \field{number}{12}
+      \field{title}{{所有制、制度环境与信贷资金配置}}
+      \field{type}{Journal Article}
+      \field{year}{2007}
+      \field{pages}{82\bibrangedash 92}
+      \range{pages}{11}
+    \endentry
+    \entry{en3}{article}{}
+      \name{author}{3}{}{%
+        {{hash=f495cdda14989886bcfdb65c02b7a19d}{%
+           family={Li},
+           familyi={L\bibinitperiod},
+           given={Qiang},
+           giveni={Q\bibinitperiod}}}%
+        {{hash=1cf551d9144a2f62273c38d368c23e83}{%
+           family={Chen},
+           familyi={C\bibinitperiod},
+           given={Liwen},
+           giveni={L\bibinitperiod}}}%
+        {{hash=eeb1ba32a79977b191ab560499454e9e}{%
+           family={Zeng},
+           familyi={Z\bibinitperiod},
+           given={Yong},
+           giveni={Y\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {Emerald Publishing Limited}%
+      }
+      \strng{namehash}{6780bc20b00db39ec803e68d01a94d81}
+      \strng{fullhash}{6780bc20b00db39ec803e68d01a94d81}
+      \strng{bibnamehash}{6780bc20b00db39ec803e68d01a94d81}
+      \strng{authorbibnamehash}{6780bc20b00db39ec803e68d01a94d81}
+      \strng{authornamehash}{6780bc20b00db39ec803e68d01a94d81}
+      \strng{authorfullhash}{6780bc20b00db39ec803e68d01a94d81}
+      \field{sortinit}{L}
+      \field{sortinithash}{7c47d417cecb1f4bd38d1825c427a61a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{China Finance Review International}
+      \field{number}{3}
+      \field{title}{{The Mechanism and Effectiveness of Credit Scoring of P2P Lending Platform: Evidence from Renrendai.com}}
+      \field{volume}{8}
+      \field{year}{2018}
+      \field{pages}{256\bibrangedash 274}
+      \range{pages}{19}
+    \endentry
+    \entry{cn2}{article}{}
+      \name{author}{3}{}{%
+        {{hash=f0c7e8b59dbb181f993fbda63d920ef4}{%
+           family={刘凤良},
+           familyi={刘\bibinitperiod}}}%
+        {{hash=c7a38317d2f6a5670e09c7c3429667a2}{%
+           family={章潇萌},
+           familyi={章\bibinitperiod}}}%
+        {{hash=24de7b8dffdd4755a07f4a06cc45918f}{%
+           family={于泽},
+           familyi={于\bibinitperiod}}}%
+      }
+      \strng{namehash}{fcbc34727f7e9b2441acfebc3ac4a354}
+      \strng{fullhash}{fcbc34727f7e9b2441acfebc3ac4a354}
+      \strng{bibnamehash}{fcbc34727f7e9b2441acfebc3ac4a354}
+      \strng{authorbibnamehash}{fcbc34727f7e9b2441acfebc3ac4a354}
+      \strng{authornamehash}{fcbc34727f7e9b2441acfebc3ac4a354}
+      \strng{authorfullhash}{fcbc34727f7e9b2441acfebc3ac4a354}
+      \field{sortinit}{l}
+      \field{sortinithash}{7c47d417cecb1f4bd38d1825c427a61a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{issn}{1002-7246}
+      \field{journaltitle}{金融研究}
+      \field{number}{02}
+      \field{title}{{高投资、结构失衡与价格指数二元分化}}
+      \field{type}{Journal Article}
+      \field{year}{2017}
+      \true{nocite}
+      \field{pages}{54\bibrangedash 69}
+      \range{pages}{16}
+    \endentry
+    \entry{cn3}{article}{}
+      \name{author}{2}{}{%
+        {{hash=5bc52b8b03b231f26f48715a9feb91d5}{%
+           family={吕捷},
+           familyi={吕\bibinitperiod}}}%
+        {{hash=7e2343b1b9f4734dd1ce46e2bc6a760b}{%
+           family={王高望},
+           familyi={王\bibinitperiod}}}%
+      }
+      \strng{namehash}{0d8bf41deed0c47bf72f5c85cb691224}
+      \strng{fullhash}{0d8bf41deed0c47bf72f5c85cb691224}
+      \strng{bibnamehash}{0d8bf41deed0c47bf72f5c85cb691224}
+      \strng{authorbibnamehash}{0d8bf41deed0c47bf72f5c85cb691224}
+      \strng{authornamehash}{0d8bf41deed0c47bf72f5c85cb691224}
+      \strng{authorfullhash}{0d8bf41deed0c47bf72f5c85cb691224}
+      \field{sortinit}{l}
+      \field{sortinithash}{7c47d417cecb1f4bd38d1825c427a61a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{issn}{0577-9154}
+      \field{journaltitle}{经济研究}
+      \field{number}{04}
+      \field{title}{{CPI 与 PPI “背离”的结构性解释}}
+      \field{type}{Journal Article}
+      \field{volume}{50}
+      \field{year}{2015}
+      \true{nocite}
+      \field{pages}{136\bibrangedash 149}
+      \range{pages}{14}
+    \endentry
+    \entry{en1}{article}{}
+      \name{author}{1}{}{%
+        {{hash=4cf797d54cc5d85cca19dee896a2d23e}{%
+           family={Quadrini},
+           familyi={Q\bibinitperiod},
+           given={Vincenzo},
+           giveni={V\bibinitperiod}}}%
+      }
+      \strng{namehash}{4cf797d54cc5d85cca19dee896a2d23e}
+      \strng{fullhash}{4cf797d54cc5d85cca19dee896a2d23e}
+      \strng{bibnamehash}{4cf797d54cc5d85cca19dee896a2d23e}
+      \strng{authorbibnamehash}{4cf797d54cc5d85cca19dee896a2d23e}
+      \strng{authornamehash}{4cf797d54cc5d85cca19dee896a2d23e}
+      \strng{authorfullhash}{4cf797d54cc5d85cca19dee896a2d23e}
+      \field{sortinit}{Q}
+      \field{sortinithash}{ce69a400a872ddd02ee7fdb3b38c6abd}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{FRB Richmond Economic Quarterly}
+      \field{number}{3}
+      \field{title}{{Financial Frictions in Macroeconomic Fluctuations}}
+      \field{type}{Journal Article}
+      \field{volume}{97}
+      \field{year}{2011}
+      \true{nocite}
+      \field{pages}{209\bibrangedash 254}
+      \range{pages}{46}
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+

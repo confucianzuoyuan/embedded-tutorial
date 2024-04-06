@@ -18,6 +18,15 @@
   radius: 4pt,
 )
 
+#show raw.where(block: true): text.with(
+    size: 8pt
+)
+
+#show raw.where(block: true): par.with(
+    first-line-indent: 0em,
+    justify: false
+)
+
 #show: project.with(
   title: "ESP32-C3教程",
   authors: (
@@ -1889,15 +1898,18 @@ case ESP_GATTS_WRITE_EVT: {
                 if (b_property & ESP_GATT_CHAR_PROP_BIT_NOTIFY){
                     ESP_LOGI(GATTS_TAG, "notify enable");
                     uint8_t notify_data[15];
-                    for (int i = 0; i < sizeof(notify_data); ++i)
-                    {
-                         notify_data[i] = i%0xff;  
-                     }
-                     //the size of notify_data[] need less than MTU size
-                     esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,  
-                                                 gl_profile_tab[PROFILE_B_APP_ID].char_handle,  
-                                                 sizeof(notify_data),  
-                                                 notify_data, false);
+                    for (int i = 0; i < sizeof(notify_data); ++i) {
+                        notify_data[i] = i%0xff;
+                    }
+                    //the size of notify_data[] need less than MTU size
+                    esp_ble_gatts_send_indicate(
+                        gatts_if,
+                        param->write.conn_id,
+                        gl_profile_tab[PROFILE_B_APP_ID].char_handle,
+                        sizeof(notify_data),
+                        notify_data,
+                        false
+                    );
                 }
             }else if (descr_value == 0x0002){
                  if (b_property & ESP_GATT_CHAR_PROP_BIT_INDICATE){
@@ -2048,8 +2060,7 @@ gatt_rsp->attr_value.handle = param->write.handle;
 gatt_rsp->attr_value.offset = param->write.offset;
 gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
 memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
-esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
-                                                     param->write.trans_id, status, gatt_rsp);
+esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, gatt_rsp);
 if (response_err != ESP_OK){
 	ESP_LOGE(GATTS_TAG, "Send response error\n");
 }
@@ -2122,3 +2133,43 @@ prepare_write_env->prepare_len = 0;
 == 总结
 
 在本文档中，我们详细介绍了GATT服务器示例代码的每个部分。该应用程序是围绕应用程序配置文件的概念设计的。此外，还解释了此示例用于注册事件处理程序的程序。事件遵循一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。最后，解释了如何处理读写事件，包括通过将写操作分割成可以适应属性协议消息的块来处理长特性写入。
+
+#set page(margin: 1cm)
+#set text(size: 14pt)
+// #show raw: set text(size: 14pt) // (1) This renders raw bigger (instead of smaller) than normal text
+
+#let frame(title: none, body) = {
+  let stroke = black + 1pt
+  let radius = 5pt
+  let font = (font: "Fira Code", size: 0.71em) // (2) 0.71em gives different sizes as opposed to 10pt
+  set text(..font)
+  show raw: set text(..font)
+  box(stroke: stroke, radius: radius)[
+    #if title != none {
+        block(
+          stroke: stroke,
+          inset: 0.5em,
+          below: 0em,
+          radius: (top-left: radius, bottom-right: radius),
+          title,
+        )
+    }
+    #block(
+      width: 100%,
+      inset: (rest: 0.5em),
+      body,
+    )
+  ]
+}
+
+#let include_source(source, lang, title: none) = {
+  frame(title: title)[
+    #raw(source, lang: lang)
+  ]
+}
+
+#let file_name = "./simple.ts"
+#let code ="const black = '#000'\n\nconst white = '#fff'"
+
+// #include_source_file(file_name)
+#include_source(code, "ts", title: file_name)
