@@ -81,7 +81,7 @@ ESP-IDF 需要安装一些必备工具，才能围绕 ESP32-C3 构建固件，�
 - CMake 和 Ninja 编译工具
 - ESP-IDF
 
-安装程序允许将程序下载到现有的 ESP-IDF 目录。推荐将 ESP-IDF 下载到 `%userprofile%\Desktop\esp-idf` 目录下，其中 `%userprofile%` 代表家目录。
+安装程序允许将程序下载到现有的ESP-IDF目录。推荐将ESP-IDF下载到`%userprofile%\Desktop\esp-idf`目录下，其中`%userprofile%`代表家目录。
 
 == 启动ESP-IDF环境
 
