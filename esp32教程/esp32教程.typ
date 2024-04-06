@@ -685,6 +685,29 @@ void app_main(void) // <entry-point>
 
 #figure(image("process_isr.png", width: 80%), caption: [处理中断示意图])
 
+最后我们将编写好的代码添加到 `main` 文件夹下的 `CMakeLists.txt` 文件中。最终我们的项目的文件如下，`SRCS` 包含我们编写的 c 文件。`INCLUDE_DIRS` 包含我们编写的驱动的文件夹。
+
+#figure(
+  sourcecode(frame: none)[```
+idf_component_register(
+    SRCS
+        "smart-lock.c"
+        "drivers/keyboard_driver.c"
+        "drivers/led_driver.c"
+        "drivers/bluetooth_driver.c"
+        "drivers/wifi_driver.c"
+        "drivers/fingerprint_driver.c"
+        "drivers/tcp_driver.c"
+        "drivers/motor_driver.c"
+        "drivers/audio_driver.c"
+    INCLUDE_DIRS
+        "."
+        "./drivers"
+)
+  ```],
+  caption: "CMakeLists.txt"
+)
+
 = 红外遥控(RMT)
 
 == 简介
@@ -1210,10 +1233,6 @@ void read_sys_params(void)
   caption: "指纹模块实现代码"
 )
 
-```c
-
-```
-
 = 蓝牙功能
 
 实现了蓝牙功能和我们后面的 WIFI 功能，其实就可以自己编写代码作为固件烧录到 ESP32C3 里面了。这样也可以作为 STM32 的外设来使用了。这是 ESP32 所具有的独特的功能。
@@ -1234,11 +1253,14 @@ BLE实现了一套与经典蓝牙不同的通信协议，包括低功耗的物�
 
 总的来说，Bluedroid是Android平台上用于实现蓝牙通信功能的软件栈，而BLE则是蓝牙技术中的一种用于实现低功耗通信的标准。两者共同为Android设备提供了广泛的蓝牙通信能力，满足了不同应用场景下的需求。
 
+== GATT SERVER 代码讲解
+
 在本文档中，我们回顾了在ESP32上实现蓝牙低功耗（BLE）通用属性配置文件（GATT）服务器的GATT SERVER示例代码。这个示例围绕两个应用程序配置文件和一系列事件设计，这些事件被处理以执行一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。此外，这个示例处理读写事件，包括一个写长特性请求，它将传入数据分割成块，以便数据能够适应属性协议（ATT）消息。本文档遵循程序工作流程，并分解代码以便理解每个部分和实现背后的原因。
 
-== Includes
+=== 头文件
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1255,11 +1277,13 @@ BLE实现了一套与经典蓝牙不同的通信协议，包括低功耗的物�
 #include "esp_bt_main.h"
 #include "esp_gatt_common_api.h"
 #include "sdkconfig.h"
-```
+  ```],
+  caption: "头文件"
+)
 
-这些头文件是运行FreeRTOS和底层系统组件所必需的，包括日志功能和一个用于在非易失性闪存中存储数据的库。我们对 `"esp_bt.h"`、`"esp_bt_main.h"`、`"esp_gap_ble_api.h"` 和 `"esp_gatts_api.h"` 特别感兴趣，这些文件暴露了实现此示例所需的BLE API。
+这些头文件是运行FreeRTOS和底层系统组件所必需的，包括日志功能和一个用于在非易失性闪存中存储数据的库（也就是 flash）。我们对 `"esp_bt.h"`、`"esp_bt_main.h"`、`"esp_gap_ble_api.h"` 和 `"esp_gatts_api.h"` 特别感兴趣，这些文件暴露了实现此示例所需的BLE API。
 
-- `esp_bt.h`：从主机侧实现BT控制器和VHCI配置程序。
+- `esp_bt.h`：从主机侧实现蓝牙控制器和VHCI配置程序。
 - `esp_bt_main.h`：实现Bluedroid栈协议的初始化和启用。
 - `esp_gap_ble_api.h`：实现GAP配置，如广告和连接参数。
 - `esp_gatts_api.h`：实现GATT配置，如创建服务和特性。
@@ -1274,121 +1298,103 @@ VHCI（Virtual Host Controller Interface）是一个虚拟的主机控制器接�
 总的来说，VHCI是一个非常有用的工具，特别是在设备驱动和协议栈开发的早期阶段，它可以帮助开发者在没有实际硬件的情况下进行软件开发和测试。
 ]
 
-== 入口函数
+=== 入口函数
 
 入口函数是 `app_main()` 函数。
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 void app_main()
 {
     esp_err_t ret;
-
     // Initialize NVS.
+    // 初始化flash，很重要。
     ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES
+        || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    ret = esp_bt_controller_init(&bt_cfg);
-    if (ret) {
-        ESP_LOGE(GATTS_TAG, "%s initialize controller failed\n", __func__);
-        return;
-    }
+    esp_bt_controller_init(&bt_cfg);
+    esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    esp_bluedroid_init();
+    esp_bluedroid_enable();
 
-    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret) {
-        ESP_LOGE(GATTS_TAG, "%s enable controller failed\n", __func__);
-        return;
-    }
-    ret = esp_bluedroid_init();
-    if (ret) {
-        ESP_LOGE(GATTS_TAG, "%s init bluetooth failed\n", __func__);
-        return;
-    }
-    ret = esp_bluedroid_enable();
-    if (ret) {
-        ESP_LOGE(GATTS_TAG, "%s enable bluetooth failed\n", __func__);
-        return;
-    }
-
-    ret = esp_ble_gatts_register_callback(gatts_event_handler);
-    if (ret){
-        ESP_LOGE(GATTS_TAG, "gatts register error, error code = %x", ret);
-        return;
-    }
-    ret = esp_ble_gap_register_callback(gap_event_handler);
-    if (ret){
-        ESP_LOGE(GATTS_TAG, "gap register error, error code = %x", ret);
-        return;
-    }
-    ret = esp_ble_gatts_app_register(PROFILE_A_APP_ID);
-    if (ret){
-        ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
-        return;
-    }
-    ret = esp_ble_gatts_app_register(PROFILE_B_APP_ID);
-    if (ret){
-        ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
-        return;
-    }
-    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(512);
-    if (local_mtu_ret){
-        ESP_LOGE(GATTS_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
-    }
-    return;
+    esp_ble_gatts_register_callback(gatts_event_handler);
+    esp_ble_gap_register_callback(gap_event_handler);
+    esp_ble_gatts_app_register(PROFILE_A_APP_ID);
+    esp_ble_gatts_app_register(PROFILE_B_APP_ID);
+    esp_ble_gatt_set_local_mtu(512);
 }
-```
+  ```],
+  caption: "复制工程"
+)
 
-主函数首先初始化非易失性存储库。这个库允许在闪存中保存键值对，并被一些组件（如Wi-Fi库）用来保存SSID和密码：
+主函数首先初始化非易失性存储库。这个库允许在flash中保存键值对，并被一些组件（如Wi-Fi库）用来保存SSID和密码：
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 ret = nvs_flash_init();
-```
+  ```],
+  caption: "初始化flash"
+)
 
-== 蓝牙控制器和栈协议初始化(BT Controller and Stack Initialization)
+=== 蓝牙控制器和栈协议初始化(BT Controller and Stack Initialization)
 
-主函数还通过首先创建一个名为 `esp_bt_controller_config_t` 的BT控制器配置结构体来初始化BT控制器，该结构体使用 `BT_CONTROLLER_INIT_CONFIG_DEFAULT()` 宏生成的默认设置。BT控制器在控制器侧实现了主控制器接口（HCI）、链路层（LL）和物理层（PHY）。BT控制器对用户应用程序是不可见的，它处理BLE栈协议的底层。控制器配置包括设置BT控制器堆栈大小、优先级和HCI波特率。使用创建的设置，通过 `esp_bt_controller_init()` 函数初始化并启用BT控制器：
+主函数还通过首先创建一个名为 `esp_bt_controller_config_t` 的蓝牙控制器配置结构体来初始化蓝牙控制器，该结构体使用 `BT_CONTROLLER_INIT_CONFIG_DEFAULT()` 宏生成的默认设置。蓝牙控制器在控制器侧实现了主控制器接口（HCI）、链路层（LL）和物理层（PHY）。蓝牙控制器对用户应用程序是不可见的，它处理BLE栈协议的底层。控制器配置包括设置蓝牙控制器栈协议大小、优先级和HCI波特率。使用创建的设置，通过 `esp_bt_controller_init()` 函数初始化并启用蓝牙控制器：
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 ret = esp_bt_controller_init(&bt_cfg);
-```
+  ```],
+  caption: "初始化蓝牙控制器"
+)
 
 接下来，控制器使能为 BLE 模式。
 
-```c
-ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-```
+#figure(
+  sourcecode(frame: none)[```c
+esp_bt_controller_enable(ESP_BT_MODE_BLE);
+  ```],
+  caption: "使能为BLE模式"
+)
 
 #info[如果想要使用双模式（BLE + BT），控制器应该使能为 `ESP_BT_MODE_BTDM` 。]
 
 支持四种蓝牙模式：
 
-1. `ESP_BT_MODE_IDLE`：蓝牙未运行
-2. `ESP_BT_MODE_BLE`：BLE模式
-3. `ESP_BT_MODE_CLASSIC_BT`：经典蓝牙模式
-4. `ESP_BT_MODE_BTDM`：双模式（BLE + 经典蓝牙）
++ `ESP_BT_MODE_IDLE`：蓝牙未运行
++ `ESP_BT_MODE_BLE`：BLE模式
++ `ESP_BT_MODE_CLASSIC_BT`：经典蓝牙模式
++ `ESP_BT_MODE_BTDM`：双模式（BLE + 经典蓝牙）
 
-在BT控制器初始化之后，Bluedroid 栈协议（包括经典蓝牙和BLE的共同定义和API）通过使用以下方式被初始化和启用：
+在蓝牙控制器初始化之后，Bluedroid 栈协议（包括经典蓝牙和BLE的共同定义和API）通过使用以下方式被初始化和启用：
 
-```c
-ret = esp_bluedroid_init();
-ret = esp_bluedroid_enable();
-```
+#figure(
+  sourcecode(frame: none)[```c
+esp_bluedroid_init();
+esp_bluedroid_enable();
+  ```],
+  caption: "初始化Bluedroid栈协议API"
+)
 
 此时程序流程中的蓝牙栈协议已经启动并运行，但应用程序的功能尚未定义。功能是通过响应事件来定义的，例如当另一个设备尝试读取或写入参数并建立连接时会发生什么。两个主要的事件管理器是 GAP 和 GATT 事件处理器。应用程序需要为每个事件处理器注册一个回调函数，以便让应用程序知道哪些函数将处理 GAP 和 GATT 事件：
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 esp_ble_gatts_register_callback(gatts_event_handler);
 esp_ble_gap_register_callback(gap_event_handler);
-```
+  ```],
+  caption: "注册事件处理的回调函数"
+)
 
-函数 `gatts_event_handler()` 和 `gap_event_handler()` 处理所有从BLE堆栈推送给应用程序的事件。
+函数 `gatts_event_handler()` 和 `gap_event_handler()` 处理所有从BLE栈协议推送给应用程序的事件。
 
-== 应用程序配置文件(APPLICATION PROFILES)
+=== 应用程序配置文件(APPLICATION PROFILES)
 
 如下图所示，GATT服务器示例应用程序通过使用应用程序配置文件来组织。每个应用程序配置文件描述了一种分组功能的方式，这些功能是为一个客户端应用程序设计的，例如在智能手机或平板电脑上运行的移动应用。通过这种方式，单一设计，通过不同的应用程序配置文件启用，可以在被不同的智能手机应用使用时表现出不同的行为，允许服务器根据正在使用的客户端应用程序做出不同的反应。实际上，每个配置文件被客户端视为一个独立的BLE服务。客户端可以自行区分它感兴趣的服务。
 
@@ -1412,7 +1418,8 @@ esp_ble_gap_register_callback(gap_event_handler);
 
 结构实现是：
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 struct gatts_profile_inst {
     esp_gatts_cb_t gatts_cb;
     uint16_t gatts_if;
@@ -1427,801 +1434,220 @@ struct gatts_profile_inst {
     uint16_t descr_handle;
     esp_bt_uuid_t descr_uuid;
 };
-```
+  ```],
+  caption: "结构体的定义"
+)
 
 应用程序配置文件存储在一个数组中，并分配了相应的回调函数 `gatts_profile_a_event_handler()` 和 `gatts_profile_b_event_handler()`。GATT客户端上的不同应用程序使用不同的接口，由 `gatts_if` 参数表示。对于初始化，此参数设置为 `ESP_GATT_IF_NONE`，意味着应用程序配置文件尚未链接到任何客户端。
 
-```c
-static struct gatts_profile_inst gl_profile_tab[PROFILE_NUM] = {
-    [PROFILE_A_APP_ID] = {
-        .gatts_cb = gatts_profile_a_event_handler,
-        .gatts_if = ESP_GATT_IF_NONE,
-    [PROFILE_B_APP_ID] = {
-        .gatts_cb = gatts_profile_b_event_handler,
-        .gatts_if = ESP_GATT_IF_NONE,
+#figure(
+  sourcecode(frame: none)[```c
+struct gatts_profile_inst heart_rate_profile_tab[PROFILE_NUM] = {
+    [PROFILE_APP_IDX] = {
+        .gatts_cb = gatts_profile_event_handler,
+        .gatts_if = ESP_GATT_IF_NONE, /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
     },
 };
-```
+  ```],
+  caption: "为不同的应用注册回调函数"
+)
 
 最后，使用应用程序ID注册应用程序配置文件，这是一个用户分配的数字，用于标识每个配置文件。通过这种方式，一个服务器可以运行多个应用程序配置文件。
 
-```c
-esp_ble_gatts_app_register(PROFILE_A_APP_ID);
-esp_ble_gatts_app_register(PROFILE_B_APP_ID);
-```
+#figure(
+  sourcecode(frame: none)[```c
+esp_ble_gatts_app_register(ESP_APP_ID);
+  ```],
+  caption: "使用应用ID注册配置文件"
+)
 
-== 配置 GAP 参数
+=== gatts_event_handler函数
 
-注册应用程序事件是在程序生命周期中首先触发的事件，这个示例使用Profile A GATT事件句柄在注册时配置广告参数。这个示例提供了使用标准蓝牙核心规范广告参数或自定义原始缓冲区的选项。可以通过 `CONFIG_SET_RAW_ADV_DATA` 定义来选择此选项。原始广告数据可用于实现iBeacons、Eddystone或其他专有和自定义帧类型，如用于室内定位服务的那些，这些与标准规范不同。
-
-用于配置标准蓝牙规范广告参数的函数是 `esp_ble_gap_config_adv_data()`，它接受一个指向 `esp_ble_adv_data_t` 结构的指针。广告数据的 `esp_ble_adv_data_t` 数据结构定义如下：
-
-```c
-typedef struct {
-    bool set_scan_rsp;            /*!< Set this advertising data as scan response or not*/
-    bool include_name;            /*!< Advertising data include device name or not */
-    bool include_txpower;         /*!< Advertising data include TX power */
-    int min_interval;             /*!< Advertising data show slave preferred connection min interval */
-    int max_interval;             /*!< Advertising data show slave preferred connection max interval */
-    int appearance;               /*!< External appearance of device */
-    uint16_t manufacturer_len;    /*!< Manufacturer data length */
-    uint8_t *p_manufacturer_data; /*!< Manufacturer data point */
-    uint16_t service_data_len;    /*!< Service data length */
-    uint8_t *p_service_data;      /*!< Service data point */
-    uint16_t service_uuid_len;    /*!< Service uuid length */
-    uint8_t *p_service_uuid;      /*!< Service uuid array point */
-    uint8_t flag;                 /*!< Advertising flag of discovery mode, see BLE_ADV_DATA_FLAG detail */
-} esp_ble_adv_data_t;
-```
-
-在本示例程序中，参数被初始化为以下：
-
-```c
-static esp_ble_adv_data_t adv_data = {
-    .set_scan_rsp = false,
-    .include_name = true,
-    .include_txpower = true,
-    .min_interval = 0x0006,
-    .max_interval = 0x0010,
-    .appearance = 0x00,
-    .manufacturer_len = 0, //TEST_MANUFACTURER_DATA_LEN,
-    .p_manufacturer_data =  NULL, //&test_manufacturer[0],
-    .service_data_len = 0,
-    .p_service_data = NULL,
-    .service_uuid_len = 32,
-    .p_service_uuid = test_service_uuid128,
-    .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
-};
-```
-
-最小和最大从设备首选连接间隔以1.25毫秒为单位设置。在这个示例中，最小从设备首选连接间隔定义为 `0x0006 * 1.25毫秒 = 7.5毫秒` ，最大从设备首选连接间隔初始化为 `0x0010 * 1.25毫秒 = 20毫秒` 。
-
-广告负载可以包含多达31字节的数据。参数数据可能足够大，以至于超过31字节的广告包限制，这会导致栈切割广告包并留下部分参数。如果取消注释制造商长度和数据，这种行为可以在这个示例中展示，这会导致服务在重新编译和测试后不被广告。
-
-也可以使用 `esp_ble_gap_config_adv_data_raw()` 和 `esp_ble_gap_config_scan_rsp_data_raw()` 函数来广告自定义原始数据，这要求创建并传递一个缓冲区，用于广告数据和扫描响应数据。在这个示例中，原始数据由 `raw_adv_data[]` 和 `raw_scan_rsp_data[]` 数组表示。
-
-最后，使用 `esp_ble_gap_set_device_name()` 函数设置设备名称。注册事件处理程序如下所示：
-
-```c
-static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
-    switch (event) {
-    case ESP_GATTS_REG_EVT:
-         ESP_LOGI(GATTS_TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
-         gl_profile_tab[PROFILE_A_APP_ID].service_id.is_primary = true;
-         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.inst_id = 0x00;
-         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
-         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID_TEST_A;
-
-         esp_ble_gap_set_device_name(TEST_DEVICE_NAME);
-#ifdef CONFIG_SET_RAW_ADV_DATA
-        esp_err_t raw_adv_ret = esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
-        if (raw_adv_ret){
-            ESP_LOGE(GATTS_TAG, "config raw adv data failed, error code = %x ", raw_adv_ret);
-        }
-        adv_config_done |= adv_config_flag;
-        esp_err_t raw_scan_ret = esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
-        if (raw_scan_ret){
-            ESP_LOGE(GATTS_TAG, "config raw scan rsp data failed, error code = %x", raw_scan_ret);
-        }
-        adv_config_done |= scan_rsp_config_flag;
-#else
-        //config adv data
-        esp_err_t ret = esp_ble_gap_config_adv_data(&adv_data);
-        if (ret){
-            ESP_LOGE(GATTS_TAG, "config adv data failed, error code = %x", ret);
-        }
-        adv_config_done |= adv_config_flag;
-        //config scan response data
-        ret = esp_ble_gap_config_adv_data(&scan_rsp_data);
-        if (ret){
-            ESP_LOGE(GATTS_TAG, "config scan response data failed, error code = %x", ret);
-        }
-        adv_config_done |= scan_rsp_config_flag;
-#endif
-```
-
-== GAP Event Handler(GAP事件句柄)
-
-一旦设置了广告数据，GAP事件 `ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT` 将被触发。对于设置原始广告数据的情况，触发的事件是 `ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT`。另外，当设置了原始扫描响应数据时，将触发 `ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT` 事件。
-
-```c
-static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
-{   
-    switch (event) {
-#ifdef CONFIG_SET_RAW_ADV_DATA
-    case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
-         adv_config_done &= (~adv_config_flag);
-         if (adv_config_done==0){
-             esp_ble_gap_start_advertising(&adv_params);
-         }
-         break;
-    case ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT:
-         adv_config_done &= (~scan_rsp_config_flag);
-         if (adv_config_done==0){
-             esp_ble_gap_start_advertising(&adv_params);
-         }
-         break;
-#else
-    case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-         adv_config_done &= (~adv_config_flag);
-         if (adv_config_done == 0){
-             esp_ble_gap_start_advertising(&adv_params);
-         }
-         break;
-    case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
-         adv_config_done &= (~scan_rsp_config_flag);
-         if (adv_config_done == 0){
-             esp_ble_gap_start_advertising(&adv_params);
-         }
-         break;
-#endif
-...
-...
-```
-
-无论哪种情况，服务器都可以使用 `esp_ble_gap_start_advertising()` 函数开始广告，该函数接受一个类型为 `esp_ble_adv_params_t` 的结构体，其中包含了堆栈操作所需的广告参数：
-
-```c
-/// Advertising parameters
-typedef struct {
-    uint16_t adv_int_min;
-    /*!< Minimum advertising interval for undirected and low duty cycle directed advertising.
- 					Range: 0x0020 to 0x4000
- 					Default: N = 0x0800 (1.28 second)
-					Time = N * 0.625 msec
-					Time Range: 20 ms to 10.24 sec */
-    uint16_t adv_int_max;
-    /*!< Maximum advertising interval for undirected and low duty cycle directed advertising.
-					Range: 0x0020 to 0x4000
-					Default: N = 0x0800 (1.28 second)
-					Time = N * 0.625 msec
-					Time Range: 20 ms to 10.24 sec */
-    esp_ble_adv_type_t adv_type;            /*!< Advertising type */
-    esp_ble_addr_type_t own_addr_type;      /*!< Owner bluetooth device address type */
-    esp_bd_addr_t peer_addr;                /*!< Peer device bluetooth device address */
-    esp_ble_addr_type_t peer_addr_type;     /*!< Peer device bluetooth device address type */
-    esp_ble_adv_channel_t channel_map;      /*!< Advertising channel map */
-    esp_ble_adv_filter_t adv_filter_policy; /*!< Advertising filter policy */
-}
-esp_ble_adv_params_t;
-```
-
-请注意，`esp_ble_gap_config_adv_data()` 配置将要广告给客户端的数据，并接受一个 `esp_ble_adv_data_t` 结构体，而 `esp_ble_gap_start_advertising()` 使服务器实际开始广告，并接受一个 `esp_ble_adv_params_t` 结构体。广告数据是显示给客户端的信息，而广告参数是GAP执行所需的配置。
-
-对于这个示例，广告参数如下初始化：
-
-```c
-static esp_ble_adv_params_t test_adv_params = {
-    .adv_int_min        = 0x20,
-    .adv_int_max        = 0x40,
-    .adv_type           = ADV_TYPE_IND,
-    .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
-    //.peer_addr        =
-    //.peer_addr_type   =
-    .channel_map        = ADV_CHNL_ALL,
-    .adv_filter_policy  = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
-};
-```
-
-这些参数将广告间隔配置在40毫秒到80毫秒之间。广告类型为`ADV_IND`，这是一种通用的、不针对特定中央设备的可连接类型。地址类型为公开，使用所有频道，并允许来自任何中央设备的扫描和连接请求。
-
-如果广告成功开始，将生成一个`ESP_GAP_BLE_ADV_START_COMPLETE_EVT`事件，在这个示例中用于检查广告状态是否确实为正在广告。否则，将打印一个错误消息。
-
-```c
-...
-...
-    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
-    //advertising start complete event to indicate advertising start successfully or failed
-         if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-             ESP_LOGE(GATTS_TAG, "Advertising start failed\n");
-         }
-         break;
-...
-...
-```
-
-== GATT Event Handler
-
-当一个应用程序配置文件被注册时，将触发一个`ESP_GATTS_REG_EVT`事件。`ESP_GATTS_REG_EVT`的参数有：
-
-```c
-esp_gatt_status_t status;  /*!< Operation status */`
-uint16_t app_id;           /*!< Application id which input in register API */`
-```
-
-除了前面的参数外，该事件还包含由 BLE 栈协议分配的 GATT 接口。该事件被`gatts_event_handler()`捕获，该处理器用于将生成的接口存储在配置文件表中，然后将事件转发到相应的配置文件事件处理器。
-
-```c
-static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
+#figure(
+  sourcecode(frame: none, highlighted: (32,))[```c
+void gatts_event_handler(
+    esp_gatts_cb_event_t event,
+    esp_gatt_if_t gatts_if,
+    esp_ble_gatts_cb_param_t *param)
 {
     /* If event is register event, store the gatts_if for each profile */
-    if (event == ESP_GATTS_REG_EVT) {
-        if (param->reg.status == ESP_GATT_OK) {
-            gl_profile_tab[param->reg.app_id].gatts_if = gatts_if;
-        } else {
-            ESP_LOGI(GATTS_TAG, "Reg app failed, app_id %04x, status %d\n",
-                    param->reg.app_id,
-                    param->reg.status);
+    if (event == ESP_GATTS_REG_EVT)
+    {
+        if (param->reg.status == ESP_GATT_OK)
+        {
+            heart_rate_profile_tab[PROFILE_APP_IDX].gatts_if = gatts_if;
+        }
+        else
+        {
+            ESP_LOGE(GATTS_TABLE_TAG, "reg app failed, app_id %04x, status %d",
+                     param->reg.app_id,
+                     param->reg.status);
             return;
         }
     }
-
-/* If the gatts_if equal to profile A, call profile A cb handler,
- * so here call each profile's callback */
-    do {
+    do
+    {
         int idx;
-        for (idx = 0; idx < PROFILE_NUM; idx++) {
-            if (gatts_if == ESP_GATT_IF_NONE||gatts_if == gl_profile_tab[idx].gatts_if) 			{
-                if (gl_profile_tab[idx].gatts_cb) {
-                    gl_profile_tab[idx].gatts_cb(event, gatts_if, param);
+        for (idx = 0; idx < PROFILE_NUM; idx++)
+        {
+            /* ESP_GATT_IF_NONE, not specify a certain gatt_if, need to call every profile cb function */
+            if (gatts_if == ESP_GATT_IF_NONE
+               || gatts_if == heart_rate_profile_tab[idx].gatts_if)
+            {
+                if (heart_rate_profile_tab[idx].gatts_cb)
+                {
+                    heart_rate_profile_tab[idx].gatts_cb(event, gatts_if, param);
                 }
             }
         }
     } while (0);
 }
-```
+  ```],
+  caption: "gatts_event_handler"
+)
 
-== 创建服务
+第 32 行是最关键的，就是执行回调函数。所以我们接下来实现这个回调函数。
 
-注册事件还用于通过使用`esp_ble_gatts_create_service()`创建服务。当服务创建完成时，会调用回调事件 `ESP_GATTS_CREATE_EVT` 来向配置文件报告状态和服务ID。创建服务的方式是：
+=== gatts_profile_event_handler函数
 
-```c
-...
-...
-esp_ble_gatts_create_service(gatts_if, &gl_profile_tab[PROFILE_A_APP_ID].service_id, GATTS_NUM_HANDLE_TEST_A);
-break;
-...
-...
-```
-
-句柄的数量定义为 4 ：
-
-```c
-#define GATTS_NUM_HANDLE_TEST_A     4
-```
-
-句柄如下：
-
-1. 服务句柄
-2. 特征句柄
-3. 特征值句柄
-4. 特征描述符句柄
-
-服务被定义为一个具有16位UUID长度的主服务。服务ID使用实例ID = 0初始化，并通过`GATTS_SERVICE_UUID_TEST_A`定义UUID。
-
-服务实例ID可以用来区分具有相同UUID的多个服务。在这个示例中，由于每个应用程序配置文件只有一个服务，并且服务具有不同的UUID，所以在配置文件A和B中服务实例ID都可以定义为0。然而，如果只有一个应用程序配置文件，使用相同UUID的两个服务，则需要使用不同的实例ID来区分这两个服务。
-
-应用程序配置文件B以与配置文件A相同的方式创建服务：
-
-```c
-static void gatts_profile_b_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
-    switch (event) {
-    case ESP_GATTS_REG_EVT:
-         ESP_LOGI(GATTS_TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
-         gl_profile_tab[PROFILE_B_APP_ID].service_id.is_primary = true;
-         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.inst_id = 0x00;
-         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
-         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID_TEST_B;
-
-         esp_ble_gatts_create_service(gatts_if, &gl_profile_tab[PROFILE_B_APP_ID].service_id, GATTS_NUM_HANDLE_TEST_B);
-         break;
-...
-...
-}
-```
-
-== 启动服务和创建特征(Characteristics)
-
-当一个服务成功创建时，由配置文件GATT处理器管理的`ESP_GATTS_CREATE_EVT`事件将被触发，可以用来启动服务并向服务中添加特性。对于配置文件A的情况，服务被启动并且特性被添加如下：
-
-```c
-case ESP_GATTS_CREATE_EVT:
-  ESP_LOGI(GATTS_TAG, "CREATE_SERVICE_EVT, status %d, service_handle %d\n", param->create.status, param->create.service_handle);
-  gl_profile_tab[PROFILE_A_APP_ID].service_handle = param->create.service_handle;
-  gl_profile_tab[PROFILE_A_APP_ID].char_uuid.len = ESP_UUID_LEN_16;
-  gl_profile_tab[PROFILE_A_APP_ID].char_uuid.uuid.uuid16 = GATTS_CHAR_UUID_TEST_A;  
-
-  esp_ble_gatts_start_service(
-    gl_profile_tab[PROFILE_A_APP_ID].service_handle
-  );
-  a_property = ESP_GATT_CHAR_PROP_BIT_READ
-             | ESP_GATT_CHAR_PROP_BIT_WRITE
-             | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
-  esp_err_t add_char_ret = esp_ble_gatts_add_char(
-    gl_profile_tab[PROFILE_A_APP_ID].service_handle,
-    &gl_profile_tab[PROFILE_A_APP_ID].char_uuid,
-    ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
-    a_property,
-    &gatts_demo_char1_val,
-    NULL
-  );
-  if (add_char_ret)
-  {
-    ESP_LOGE(GATTS_TAG, "add char failed, error code =%x",add_char_ret);
-  }
-  break;
-```
-
-首先，由 BLE 堆栈生成的服务句柄被存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特性的 UUID 及其 UUID 长度。特性 UUID 的长度再次为16位。使用之前生成的服务句柄，通过 `esp_ble_gatts_start_service()` 函数启动服务。触发了一个 `ESP_GATTS_START_EVT` 事件，用于打印信息。特性通过 `esp_ble_gatts_add_char()` 函数添加到服务中，结合特性的权限和属性。在这个示例中，两个配置文件中的特性都按以下方式设置：
-
-权限：
-
-- `ESP_GATT_PERM_READ`：允许读取特性值
-- `ESP_GATT_PERM_WRITE`：允许写入特性值
-
-属性：
-
-- `ESP_GATT_CHAR_PROP_BIT_READ`：特性可以被读取
-- `ESP_GATT_CHAR_PROP_BIT_WRITE`：特性可以被写入
-- `ESP_GATT_CHAR_PROP_BIT_NOTIFY`：特性可以通知值变化
-
-对于读和写拥有权限和属性可能看起来有些多余。然而，属性的读写属性是显示给客户端的信息，以便让客户端知道服务器是否接受读写请求。从这个意义上讲，属性作为一个提示，帮助客户端正确访问服务器资源。另一方面，权限是授予客户端读取或写入该属性的授权。例如，如果客户端尝试写入一个它没有写权限的属性，服务器将拒绝该请求，即使设置了写属性。
-
-此外，这个示例给特性赋予了一个初始值，由`gatts_demo_char1_val`表示。初始值定义如下：
-
-```c
-esp_attr_value_t gatts_demo_char1_val =
+#figure(
+  sourcecode(frame: none)[```c
+void gatts_profile_event_handler(
+    esp_gatts_cb_event_t event,
+    esp_gatt_if_t gatts_if,
+    esp_ble_gatts_cb_param_t *param)
 {
-    .attr_max_len = GATTS_DEMO_CHAR_VAL_LEN_MAX,
-    .attr_len     = sizeof(char1_str),
-    .attr_value   = char1_str,
-};
-```
-这里 `char1_str` 是占位数据，没啥用
-
-```c
-uint8_t char1_str[] = {0x11,0x22,0x33};
-```
-
-and the characteristic length is defined as:
-
-```c
-#define GATTS_DEMO_CHAR_VAL_LEN_MAX 0x40
-```
-
-特性的初始值必须是一个非空对象，并且特性长度必须始终大于零，否则堆栈将返回错误。
-
-最后，特性被配置为每次读取或写入特性时都需要手动发送响应，而不是让堆栈自动响应。这是通过设置`esp_ble_gatts_add_char()`函数的最后一个参数，代表属性响应控制参数，为`ESP_GATT_RSP_BY_APP`或NULL来配置的。
-
-== 创建特征描述符
-
-向服务添加特性会触发一个`ESP_GATTS_ADD_CHAR_EVT`事件，该事件返回堆栈为刚添加的特性生成的句柄。该事件包括以下参数：
-
-```c
-esp_gatt_status_t status;          /*!< Operation status */
-uint16_t attr_handle;	           /*!< Characteristic attribute handle */
-uint16_t service_handle;           /*!< Service attribute handle */
-esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
-```
-
-事件返回的属性句柄被存储在配置文件表中，同时也设置了特性描述符的长度和 UUID 。使用`esp_ble_gatts_get_attr_value()`函数读取特性的长度和值，然后出于信息目的打印出来。最后，使用`esp_ble_gatts_add_char_descr()`函数添加特性描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值和自动响应设置。特性描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
-
-```c
-case ESP_GATTS_ADD_CHAR_EVT: {
-  uint16_t length = 0;
-  const uint8_t *prf_char;
-
-  ESP_LOGI(GATTS_TAG, "ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d\n",
-                 param->add_char.status, param->add_char.attr_handle, param->add_char.service_handle);  
-                 gl_profile_tab[PROFILE_A_APP_ID].char_handle = param->add_char.attr_handle;
-                 gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.len = ESP_UUID_LEN_16;  
-                 gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.uuid.uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;  
-                 esp_err_t get_attr_ret = esp_ble_gatts_get_attr_value(param->add_char.attr_handle, &length, &prf_char);         
-  if (get_attr_ret == ESP_FAIL) {  
-    ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
-  }
-  ESP_LOGI(GATTS_TAG, "the gatts demo char length = %x\n", length);
-  for (int i = 0; i < length; i++) {
-    ESP_LOGI(GATTS_TAG, "prf_char[%x] = %x\n",i,prf_char[i]);
-  }       
-  esp_err_t add_descr_ret = esp_ble_gatts_add_char_descr(  
-    gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
-    &gl_profile_tab[PROFILE_A_APP_ID].descr_uuid,  
-    ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
-    NULL, NULL
-  );
-  if (add_descr_ret) {
-    ESP_LOGE(GATTS_TAG, "add char descr failed, error code = %x", add_descr_ret);
-  }
-  break;
-}
-```
-
-一旦添加了描述符，就会触发`ESP_GATTS_ADD_CHAR_DESCR_EVT`事件，在本示例中用于打印一条信息消息。
-
-```c
-    case ESP_GATTS_ADD_CHAR_DESCR_EVT:
-         ESP_LOGI(GATTS_TAG, "ADD_DESCR_EVT, status %d, attr_handle %d, service_handle %d\n",
-                  param->add_char.status, param->add_char.attr_handle,  
-                  param->add_char.service_handle);
-         break;
-```
-
-这个过程在配置文件B的事件处理器中重复，以便为该配置文件创建服务和特性。
-
-== 连接事件
-
-当客户端连接到GATT服务器时，将触发`ESP_GATTS_CONNECT_EVT`事件。此事件用于更新连接参数，如延迟、最小连接间隔、最大连接间隔和超时。连接参数被存储到一个`esp_ble_conn_update_params_t`结构体中，然后传递给`esp_ble_gap_update_conn_params()`函数。更新连接参数的过程只需要做一次，因此配置文件B的连接事件处理器不包括`esp_ble_gap_update_conn_params()`函数。最后，事件返回的连接ID被存储在配置文件表中。
-
-配置文件A连接事件：
-
-```c
-case ESP_GATTS_CONNECT_EVT: {  
-     esp_ble_conn_update_params_t conn_params = {0};  
-     memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
-     /* For the IOS system, please reference the apple official documents about the ble connection parameters restrictions. */
-     conn_params.latency = 0;  
-     conn_params.max_int = 0x30;    // max_int = 0x30*1.25ms = 40ms  
-     conn_params.min_int = 0x10;    // min_int = 0x10*1.25ms = 20ms   
-     conn_params.timeout = 400;     // timeout = 400*10ms = 4000ms  
-     ESP_LOGI(GATTS_TAG, "ESP_GATTS_CONNECT_EVT, conn_id %d, remote %02x:%02x:%02x:%02x:%02x:%02x:, is_conn %d",  
-             param->connect.conn_id,  
-             param->connect.remote_bda[0],  
-             param->connect.remote_bda[1],  
-             param->connect.remote_bda[2],  
-             param->connect.remote_bda[3],  
-             param->connect.remote_bda[4],  
-             param->connect.remote_bda[5],  
-             param->connect.is_connected);
- 	 gl_profile_tab[PROFILE_A_APP_ID].conn_id = param->connect.conn_id;
-	 //start sent the update connection parameters to the peer device.
-	 esp_ble_gap_update_conn_params(&conn_params);
-	 break;
+    switch (event)
+    {
+    case ESP_GATTS_REG_EVT:
+    {
+        esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
+        esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
+        adv_config_done |= ADV_CONFIG_FLAG;
+        esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
+        adv_config_done |= SCAN_RSP_CONFIG_FLAG;
+        esp_ble_gatts_create_attr_tab(gatt_db, gatts_if, HRS_IDX_NB, SVC_INST_ID);
     }
-```
-
-配置文件 B 连接事件：
-
-```c
-case ESP_GATTS_CONNECT_EVT:  
-     ESP_LOGI(GATTS_TAG, "CONNECT_EVT, conn_id %d, remote %02x:%02x:%02x:%02x:%02x:%02x:, is_conn %d\n",  
-              param->connect.conn_id,  
-              param->connect.remote_bda[0],  
-              param->connect.remote_bda[1],  
-              param->connect.remote_bda[2],  
-              param->connect.remote_bda[3],  
-              param->connect.remote_bda[4],  
-              param->connect.remote_bda[5],  
-              param->connect.is_connected);
-	  gl_profile_tab[PROFILE_B_APP_ID].conn_id = param->connect.conn_id;
-	  break;
-```
-
-`esp_ble_gap_update_conn_params()`函数触发一个GAP事件`ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT`，用于打印连接信息：
-
-```c
-    case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
-         ESP_LOGI(GATTS_TAG, "update connection params status = %d, min_int = %d, max_int = %d,
-                  conn_int = %d,latency = %d, timeout = %d",
-                  param->update_conn_params.status,
-                  param->update_conn_params.min_int,
-                  param->update_conn_params.max_int,
-                  param->update_conn_params.conn_int,
-                  param->update_conn_params.latency,
-                  param->update_conn_params.timeout);
-         break;
-```
-
-== 管理读事件
-
-现在服务和特性已经创建并启动，程序可以接收读和写事件。读操作由`ESP_GATTS_READ_EVT`事件表示，该事件有以下参数：
-
-```c
-uint16_t conn_id;          /*!< Connection id */
-uint32_t trans_id;         /*!< Transfer id */
-esp_bd_addr_t bda;         /*!< The bluetooth device address which been read */
-uint16_t handle;           /*!< The attribute handle */
-uint16_t offset;           /*!< Offset of the value, if the value is too long */
-bool is_long;              /*!< The value is too long or not */
-bool need_rsp;             /*!< The read operation need to do response */
-```
-
-在这个示例中，使用事件给定的相同句柄，构造一个带有虚拟数据的响应并发送回主机。除了响应之外，GATT接口、连接ID和传输ID也作为参数包含在`esp_ble_gatts_send_response()`函数中。如果在创建特性或描述符时将自动响应字节设置为NULL，则需要此函数。
-
-```c
-case ESP_GATTS_READ_EVT: {
-     ESP_LOGI(GATTS_TAG, "GATT_READ_EVT, conn_id %d, trans_id %d, handle %d\n",  
-              param->read.conn_id, param->read.trans_id, param->read.handle);  
-              esp_gatt_rsp_t rsp;  
-              memset(&rsp, 0, sizeof(esp_gatt_rsp_t));  
-              rsp.attr_value.handle = param->read.handle;  
-              rsp.attr_value.len = 4;  
-              rsp.attr_value.value[0] = 0xde;  
-              rsp.attr_value.value[1] = 0xed;  
-              rsp.attr_value.value[2] = 0xbe;  
-              rsp.attr_value.value[3] = 0xef;  
-              esp_ble_gatts_send_response(gatts_if,  
-                                          param->read.conn_id,  
-                                          param->read.trans_id,  
-                                          ESP_GATT_OK, &rsp);
-     break;
-    }
-```
-
-== 管理写事件
-
-写事件由`ESP_GATTS_WRITE_EVT`事件表示，该事件具有以下参数：
-
-```c
-uint16_t conn_id;         /*!< Connection id */
-uint32_t trans_id;        /*!< Transfer id */
-esp_bd_addr_t bda;        /*!< The bluetooth device address which been written */
-uint16_t handle;          /*!< The attribute handle */
-uint16_t offset;          /*!< Offset of the value, if the value is too long */
-bool need_rsp;            /*!< The write operation need to do response */
-bool is_prep;             /*!< This write operation is prepare write */
-uint16_t len;             /*!< The write attribute value length */
-uint8_t *value;           /*!< The write attribute value */
-```
-
-在这个示例中实现了两种类型的写事件，写特性值和写长特性值。第一种类型的写操作用于当特性值可以适应一个属性协议最大传输单元（ATT MTU），通常是23字节长的情况。第二种类型用于当要写入的属性长度超过可以在一个单独的ATT消息中发送的长度时，通过使用准备写响应将数据分成多个块，之后使用执行写请求来确认或取消完整的写请求。这种行为在#link("https://www.bluetooth.com/specifications/bluetooth-core-specification")[蓝牙规范版本4.2]，卷3，第G部分，第4.9节中定义。下图展示了写长特性消息流程。
-
-当触发写事件时，这个示例会打印日志消息，然后执行`example_write_event_env()`函数。
-
-```c
-case ESP_GATTS_WRITE_EVT: {                          
-     ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, conn_id %d, trans_id %d, handle %d\n", param->write.conn_id, param->write.trans_id, param->write.handle);
-     if (!param->write.is_prep){
-        ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, value len %d, value :", param->write.len);
-        esp_log_buffer_hex(GATTS_TAG, param->write.value, param->write.len);
-        if (gl_profile_tab[PROFILE_B_APP_ID].descr_handle == param->write.handle && param->write.len == 2){
-            uint16_t descr_value= param->write.value[1]<<8 | param->write.value[0];
-            if (descr_value == 0x0001){
-                if (b_property & ESP_GATT_CHAR_PROP_BIT_NOTIFY){
-                    ESP_LOGI(GATTS_TAG, "notify enable");
-                    uint8_t notify_data[15];
-                    for (int i = 0; i < sizeof(notify_data); ++i) {
-                        notify_data[i] = i%0xff;
-                    }
-                    //the size of notify_data[] need less than MTU size
+    break;
+    case ESP_GATTS_READ_EVT:
+        break;
+    case ESP_GATTS_WRITE_EVT:
+        if (!param->write.is_prep)
+        {
+            esp_log_buffer_hex("接收到的数据：", param->write.value, param->write.len);
+            if (param->write.value[0] == 'a'
+               && param->write.value[1] == 't'
+               && param->write.value[2] == 'g'
+               && param->write.value[3] == 'u'
+               && param->write.value[4] == 'i'
+               && param->write.value[5] == 'g'
+               && param->write.value[6] == 'u')
+            {
+                printf("通过蓝牙开锁成功\r\n");
+                MOTOR_Open_lock();
+            }
+            if (heart_rate_handle_table[IDX_CHAR_CFG_A] == param->write.handle
+                && param->write.len == 2)
+            {
+                uint16_t descr_value = param->write.value[1] << 8 | param->write.value[0];
+                if (descr_value == 0x0001)
+                {
+                    uint8_t notify_data[] = "atguigu";
+                    // the size of notify_data[] need less than MTU size
                     esp_ble_gatts_send_indicate(
                         gatts_if,
                         param->write.conn_id,
-                        gl_profile_tab[PROFILE_B_APP_ID].char_handle,
+                        heart_rate_handle_table[IDX_CHAR_VAL_A],
                         sizeof(notify_data),
                         notify_data,
-                        false
-                    );
+                        false);
                 }
-            }else if (descr_value == 0x0002){
-                 if (b_property & ESP_GATT_CHAR_PROP_BIT_INDICATE){
-                     ESP_LOGI(GATTS_TAG, "indicate enable");
-                     uint8_t indicate_data[15];
-                     for (int i = 0; i < sizeof(indicate_data); ++i)
-                     {
-                         indicate_data[i] = i % 0xff;
-                      }
-                      //the size of indicate_data[] need less than MTU size
-                     esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,  
-                                                 gl_profile_tab[PROFILE_B_APP_ID].char_handle,  
-                                                 sizeof(indicate_data),  
-                                                 indicate_data, true);
+                else if (descr_value == 0x0002)
+                {
+                    // ...
                 }
-             }
-             else if (descr_value == 0x0000){
-                 ESP_LOGI(GATTS_TAG, "notify/indicate disable ");
-             }else{
-                 ESP_LOGE(GATTS_TAG, "unknown value");
-             }
+                else if (descr_value == 0x0000)
+                {
+                    // ...
+                }
+                else
+                {
+                    // ...
+                }
+            }
+            /* send response when param->write.need_rsp is true*/
+            if (param->write.need_rsp)
+            {
+                esp_ble_gatts_send_response(
+                    gatts_if,
+                    param->write.conn_id,
+                    param->write.trans_id,
+                    ESP_GATT_OK,
+                    NULL);
+            }
         }
-    }
-    example_write_event_env(gatts_if, &a_prepare_write_env, param);
-    break;
-}
-```
-
-#figure(image("GATT_Server_Figure_2.png", width: 80%), caption: [离线安装包示意图])
-
-`example_write_event_env()`函数包含了写长特性过程的逻辑：
-
-```c
-void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
-    esp_gatt_status_t status = ESP_GATT_OK;
-    if (param->write.need_rsp){
-       if (param->write.is_prep){
-            if (prepare_write_env->prepare_buf == NULL){
-                prepare_write_env->prepare_buf = (uint8_t *)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));
-                prepare_write_env->prepare_len = 0;
-                if (prepare_write_env->prepare_buf == NULL) {
-                    ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
-                    status = ESP_GATT_NO_RESOURCES;
-                }
-            } else {
-                if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
-                    status = ESP_GATT_INVALID_OFFSET;
-                }
-                else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
-                    status = ESP_GATT_INVALID_ATTR_LEN;
-                }
-            }
-
-            esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
-            gatt_rsp->attr_value.len = param->write.len;
-            gatt_rsp->attr_value.handle = param->write.handle;
-            gatt_rsp->attr_value.offset = param->write.offset;
-            gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
-            memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
-            esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
-                                                                 param->write.trans_id, status, gatt_rsp);
-            if (response_err != ESP_OK){
-               ESP_LOGE(GATTS_TAG, "Send response error\n");
-            }
-            free(gatt_rsp);
-            if (status != ESP_GATT_OK){
-                return;
-            }
-            memcpy(prepare_write_env->prepare_buf + param->write.offset,
-                   param->write.value,
-                   param->write.len);
-            prepare_write_env->prepare_len += param->write.len;
-
-        }else{
-            esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
+        else
+        {
+            /* handle prepare write */
+            example_prepare_write_event_env(gatts_if, &prepare_write_env, param);
         }
+        break;
+    case ESP_GATTS_EXEC_WRITE_EVT:
+        example_exec_write_event_env(&prepare_write_env, param);
+        break;
+    case ESP_GATTS_MTU_EVT:
+    case ESP_GATTS_CONF_EVT:
+    case ESP_GATTS_START_EVT:
+        break;
+    case ESP_GATTS_CONNECT_EVT:
+        ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_CONNECT_EVT, conn_id = %d", param->connect.conn_id);
+        esp_log_buffer_hex(GATTS_TABLE_TAG, param->connect.remote_bda, 6);
+        esp_ble_conn_update_params_t conn_params = {0};
+        memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
+        /* For the iOS system, please refer to Apple official documents about the BLE connection parameters restrictions. */
+        conn_params.latency = 0;
+        conn_params.max_int = 0x20; // max_int = 0x20*1.25ms = 40ms
+        conn_params.min_int = 0x10; // min_int = 0x10*1.25ms = 20ms
+        conn_params.timeout = 400;  // timeout = 400*10ms = 4000ms
+        // start sent the update connection parameters to the peer device.
+        esp_ble_gap_update_conn_params(&conn_params);
+        break;
+    case ESP_GATTS_DISCONNECT_EVT:
+        ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_DISCONNECT_EVT, reason = 0x%x", param->disconnect.reason);
+        esp_ble_gap_start_advertising(&adv_params);
+        break;
+    case ESP_GATTS_CREAT_ATTR_TAB_EVT:
+    {
+        if (param->add_attr_tab.status != ESP_GATT_OK)
+        {
+            ESP_LOGE(GATTS_TABLE_TAG, "create attribute table failed, error code=0x%x", param->add_attr_tab.status);
+        }
+        else if (param->add_attr_tab.num_handle != HRS_IDX_NB)
+        {
+            ESP_LOGE(GATTS_TABLE_TAG, "create attribute table abnormally, num_handle (%d) \
+                        doesn't equal to HRS_IDX_NB(%d)",
+                     param->add_attr_tab.num_handle, HRS_IDX_NB);
+        }
+        else
+        {
+            ESP_LOGI(GATTS_TABLE_TAG, "create attribute table successfully, the number handle = %d\n", param->add_attr_tab.num_handle);
+            memcpy(heart_rate_handle_table, param->add_attr_tab.handles, sizeof(heart_rate_handle_table));
+            esp_ble_gatts_start_service(heart_rate_handle_table[IDX_SVC]);
+        }
+        break;
+    }
+    case ESP_GATTS_STOP_EVT:
+    case ESP_GATTS_OPEN_EVT:
+    case ESP_GATTS_CANCEL_OPEN_EVT:
+    case ESP_GATTS_CLOSE_EVT:
+    case ESP_GATTS_LISTEN_EVT:
+    case ESP_GATTS_CONGEST_EVT:
+    case ESP_GATTS_UNREG_EVT:
+    case ESP_GATTS_DELETE_EVT:
+    default:
+        break;
     }
 }
-```
-
-当客户端发送写请求或准备写请求时，服务器应当响应。然而，如果客户端发送一个不需要响应的写命令，服务器不需要回复响应。这通过检查`write.need_rsp`参数的值在写过程中进行检查。如果需要响应，程序继续进行响应准备；如果不存在，客户端不需要响应，因此程序结束。
-
-```c
-void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env,  
-                             esp_ble_gatts_cb_param_t *param){
-    esp_gatt_status_t status = ESP_GATT_OK;
-    if (param->write.need_rsp){
-…
-```
-
-然后，函数检查由`write.is_prep`表示的准备写请求参数是否被设置，这意味着客户端正在请求一个长特性写操作。如果存在，程序继续准备多个写响应；如果不存在，那么服务器简单地发送回一个单一的写响应。
-
-```c
-...
-if (param->write.is_prep){
-...
-}else{
-	esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
-}
-...
-```
-
-为了处理长特性写操作，定义并实例化了一个准备缓冲区结构：
-
-```c
-typedef struct {
-    uint8_t                 *prepare_buf;
-    int                      prepare_len;
-} prepare_type_env_t;
-
-static prepare_type_env_t a_prepare_write_env;
-static prepare_type_env_t b_prepare_write_env;
-```
-
-为了使用准备缓冲区，为其分配了一些内存空间。如果由于内存不足导致分配失败，将打印一个错误：
-
-```c
-if (prepare_write_env->prepare_buf == NULL) {
-    prepare_write_env->prepare_buf =  
-    (uint8_t*)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));  
-    prepare_write_env->prepare_len = 0;
-    if (prepare_write_env->prepare_buf == NULL) {  
-       ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
-       status = ESP_GATT_NO_RESOURCES;
-    }
-}
-```
-
-如果缓冲区不是NULL，这意味着初始化完成，程序然后检查传入写操作的偏移量和消息长度是否适合该缓冲区。
-
-```c
-else {
-	if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
-		status = ESP_GATT_INVALID_OFFSET;
-	}
-	else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
-		 status = ESP_GATT_INVALID_ATTR_LEN;
-	}
-}
-```
-
-程序现在准备要发送回客户端的类型为`esp_gatt_rsp_t`的响应。响应是使用写请求的相同参数构造的，如长度、句柄和偏移量。此外，设置了写入此特性所需的GATT认证类型为`ESP_GATT_AUTH_REQ_NONE`，这意味着客户端可以在不需要先进行认证的情况下写入此特性。一旦响应被发送，为其使用而分配的内存被释放。
-
-```c
-esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
-gatt_rsp->attr_value.len = param->write.len;
-gatt_rsp->attr_value.handle = param->write.handle;
-gatt_rsp->attr_value.offset = param->write.offset;
-gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
-memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
-esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, gatt_rsp);
-if (response_err != ESP_OK){
-	ESP_LOGE(GATTS_TAG, "Send response error\n");
-}
-free(gatt_rsp);
-if (status != ESP_GATT_OK){
-	return;
-}
-```
-
-最后，传入的数据被复制到创建的缓冲区中，并且其长度通过偏移量增加：
-
-```c
-memcpy(prepare_write_env->prepare_buf + param->write.offset,
-       param->write.value,  
-       param->write.len);
-prepare_write_env->prepare_len += param->write.len;
-```
-
-客户端通过发送执行写请求来完成长写序列。这个命令触发一个`ESP_GATTS_EXEC_WRITE_EVT`事件。服务器通过发送响应并执行`example_exec_write_event_env()`函数来处理这个事件：
-
-```c
-case ESP_GATTS_EXEC_WRITE_EVT:  
-     ESP_LOGI(GATTS_TAG,"ESP_GATTS_EXEC_WRITE_EVT");  
-     esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, NULL);  
-     example_exec_write_event_env(&a_prepare_write_env, param);  
-     break;
-```
-
-我们看一下写函数的执行函数
-
-```c
-void example_exec_write_event_env(prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
-    if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC){
-        esp_log_buffer_hex(GATTS_TAG, prepare_write_env->prepare_buf, prepare_write_env->prepare_len);
-    }
-    else{
-        ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
-    }
-    if (prepare_write_env->prepare_buf) {
-        free(prepare_write_env->prepare_buf);
-        prepare_write_env->prepare_buf = NULL;
-    }
-####     prepare_write_env->prepare_len = 0;
-}
-```
-
-执行写操作用于通过长特性写过程确认或取消之前完成的写操作。为了做到这一点，函数检查在事件接收到的参数中的`exec_write_flag`。如果标志等于由`exec_write_flag`表示的执行标志，写操作被确认，并且缓冲区内容将被打印在日志中；如果不是，则意味着写操作被取消，所有已写入的数据将被删除。
-
-```c
-if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC){  
-   esp_log_buffer_hex(GATTS_TAG,  
-                      prepare_write_env->prepare_buf,  
-                      prepare_write_env->prepare_len);
- }
-else{
-    ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
- }
-```
-
-最后，为了存储来自长写操作的数据块而创建的缓冲区结构被释放，其指针被设置为NULL，以便为下一个长写过程做好准备。
-
-```c
-if (prepare_write_env->prepare_buf) {
-    free(prepare_write_env->prepare_buf);
-    prepare_write_env->prepare_buf = NULL;
-}
-prepare_write_env->prepare_len = 0;
-```
-
-== 总结
-
-在本文档中，我们详细介绍了GATT服务器示例代码的每个部分。该应用程序是围绕应用程序配置文件的概念设计的。此外，还解释了此示例用于注册事件处理程序的程序。事件遵循一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。最后，解释了如何处理读写事件，包括通过将写操作分割成可以适应属性协议消息的块来处理长特性写入。
+  ```],
+  caption: "复制工程"
+)

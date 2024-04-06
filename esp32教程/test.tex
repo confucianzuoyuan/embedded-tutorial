@@ -1,0 +1,25 @@
+\documentclass{elegantbook}
+\newtcolorbox{mycode}[2][]{%
+    enhanced,
+    attach boxed title to top right={yshift=-\tcboxedtitleheight},
+    boxed title style={
+        size=small,
+        colback=gray!50,
+        colframe=gray!50,
+        sharp corners=downhill,
+        arc=.5cm,
+        top=1mm,bottom=1mm,left=1mm,right=1mm},
+    fonttitle=\color{black}\itshape,
+    colframe=gray!20,
+    top=\tcboxedtitleheight,
+    bottom=\tcboxedtitleheight,
+    sharp corners=downhill,
+    arc=.5cm,
+    title={#2},#1
+}
+\usepackage{lipsum}
+\begin{document}
+\begin{mycode}{This is some blahblah}
+\lipsum[1]
+\end{mycode}
+\end{document}
