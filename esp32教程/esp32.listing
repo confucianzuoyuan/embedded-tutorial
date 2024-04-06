@@ -41,7 +41,7 @@ static void ISR_QUEUE_Init(void)
 }
 
 // 主程序
-void app_main(void) @\label{line:sp}@
+void (*@\Colorbox{red}{app\_main}@*)(void) (*@\label{line:sp}@*) (*@\tikz[overlay]{\draw[thick,red,->] (0,0.5ex) -- ++(0.5,0) node[right] {入口点函数}}@*)
 {
   ISR_QUEUE_Init();
 }
