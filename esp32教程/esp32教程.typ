@@ -806,11 +806,11 @@ void light_led(uint8_t led_num)
 
 我们来编写初始化 GPIO 引脚的代码。
 
-```c
-void AUDIO_Init(void)
-{
-    ESP_LOGI(AUDIO_TAG, "WTN6170P20_Init");
+`AUDIO_BUSY_PIN` 和 `AUDIO_SDA_PIN` 可查询电路图来进行配置。
 
+#figure(
+  sourcecode(frame: none)[```c
+{
     gpio_config_t io_conf = {};
     // 禁用中断
     io_conf.intr_type = GPIO_INTR_DISABLE;
@@ -828,14 +828,16 @@ void AUDIO_Init(void)
     io_conf.pin_bit_mask = (1ULL << AUDIO_BUSY_PIN);
     gpio_config(&io_conf);
 }
-```
+  ```],
+  caption: "语音模块GPIO引脚配置"
+)
 
 给语音模块发送数据并播报的代码，通过发送不同的 u8 数据，使语音模块播放不同的声音。具体参见语音模块文档。
 
-```c
+#figure(
+  sourcecode(frame: none, highlighted: (7,))[```c
 void Line_1A_WT588F(uint8_t DDATA)
 {
-    ESP_LOGI(AUDIO_TAG, "Line_1A_WT588F data:0X%2X", DDATA);
     uint8_t S_DATA, j;
     uint8_t B_DATA;
     S_DATA = DDATA;
@@ -864,7 +866,9 @@ void Line_1A_WT588F(uint8_t DDATA)
     AUDIO_SDA_H;
     DELAY_MS(2);
 }
-```
+  ```],
+  caption: "播报语音代码"
+)
 
 = 电机驱动
 
