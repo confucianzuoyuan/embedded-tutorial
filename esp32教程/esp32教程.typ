@@ -882,7 +882,8 @@ void Line_1A_WT588F(uint8_t DDATA)
 
 初始化 GPIO 引脚代码
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 void MOTOR_Init(void)
 {
     gpio_config_t io_conf;
@@ -898,11 +899,14 @@ void MOTOR_Init(void)
     gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
     gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
 }
-```
+  ```],
+  caption: "电机GPIO引脚初始化"
+)
 
 开锁代码
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 void MOTOR_Open_lock(void)
 {
     // 正转 1 秒
@@ -925,17 +929,20 @@ void MOTOR_Open_lock(void)
     gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
     Line_1A_WT588F(25);
 }
-```
+  ```],
+  caption: "控制电机转动来开关锁"
+)
 
 = 指纹模块
 
-MCU 使用串口和指纹模块进行通信。电路图如下：
+ESP32使用串口和指纹模块进行通信。电路图如下：
 
 #figure(image("fingerprint.png", width: 80%), caption: [指纹模块电路图])
 
 我们先来写头文件
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 #ifndef __FINGERPRINT_DRIVER_H_
 #define __FINGERPRINT_DRIVER_H_
 
@@ -975,17 +982,18 @@ int search(void);
 void read_sys_params(void);
 
 #endif
-```
+  ```],
+  caption: "指纹模块头文件"
+)
 
 然后编写头文件中接口的实现
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 #include "fingerprint_driver.h"
 
 void FINGERPRINT_Init(void)
 {
-    printf("hahahahahahah\r\n");
-
     /* Configure parameters of an UART driver,
      * communication pins and install the driver */
     uart_config_t uart_config = {
@@ -998,9 +1006,18 @@ void FINGERPRINT_Init(void)
     };
     int intr_alloc_flags = 0;
 
-    ESP_ERROR_CHECK(uart_driver_install(ECHO_UART_PORT_NUM, BUF_SIZE * 2, 0, 0, NULL, intr_alloc_flags));
-    ESP_ERROR_CHECK(uart_param_config(ECHO_UART_PORT_NUM, &uart_config));
-    ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT_NUM, ECHO_TEST_TXD, ECHO_TEST_RXD, ECHO_TEST_RTS, ECHO_TEST_CTS));
+    ESP_ERROR_CHECK(uart_driver_install(
+        ECHO_UART_PORT_NUM,
+        BUF_SIZE * 2, 0, 0, NULL,
+        intr_alloc_flags));
+    ESP_ERROR_CHECK(uart_param_config(
+        ECHO_UART_PORT_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(
+        ECHO_UART_PORT_NUM,
+        ECHO_TEST_TXD,
+        ECHO_TEST_RXD,
+        ECHO_TEST_RTS,
+        ECHO_TEST_CTS));
 
     // 中断
     gpio_config_t io_conf;
@@ -1189,6 +1206,12 @@ void read_sys_params(void)
 
     free(data);
 }
+  ```],
+  caption: "指纹模块实现代码"
+)
+
+```c
+
 ```
 
 = 蓝牙功能
@@ -2202,43 +2225,3 @@ prepare_write_env->prepare_len = 0;
 == 总结
 
 在本文档中，我们详细介绍了GATT服务器示例代码的每个部分。该应用程序是围绕应用程序配置文件的概念设计的。此外，还解释了此示例用于注册事件处理程序的程序。事件遵循一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。最后，解释了如何处理读写事件，包括通过将写操作分割成可以适应属性协议消息的块来处理长特性写入。
-
-#set page(margin: 1cm)
-#set text(size: 14pt)
-// #show raw: set text(size: 14pt) // (1) This renders raw bigger (instead of smaller) than normal text
-
-#let frame(title: none, body) = {
-  let stroke = black + 1pt
-  let radius = 5pt
-  let font = (font: "Fira Code", size: 0.71em) // (2) 0.71em gives different sizes as opposed to 10pt
-  set text(..font)
-  show raw: set text(..font)
-  box(stroke: stroke, radius: radius)[
-    #if title != none {
-        block(
-          stroke: stroke,
-          inset: 0.5em,
-          below: 0em,
-          radius: (top-left: radius, bottom-right: radius),
-          title,
-        )
-    }
-    #block(
-      width: 100%,
-      inset: (rest: 0.5em),
-      body,
-    )
-  ]
-}
-
-#let include_source(source, lang, title: none) = {
-  frame(title: title)[
-    #raw(source, lang: lang)
-  ]
-}
-
-#let file_name = "./simple.ts"
-#let code ="const black = '#000'\n\nconst white = '#fff'"
-
-// #include_source_file(file_name)
-#include_source(code, "ts", title: file_name)
