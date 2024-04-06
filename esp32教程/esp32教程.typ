@@ -1,4 +1,6 @@
 #import "@preview/gentle-clues:0.7.0": *
+#import "@preview/codelst:2.0.1": sourcecode, lineref
+#import "@preview/showybox:2.0.1": showybox
 #import "simplepaper.typ": *
 
 // Display inline code in a small box
@@ -32,6 +34,18 @@
   authors: (
     "尚硅谷",
   ),
+)
+
+#show figure.where(kind: raw): (fig) => showybox(
+  breakable: true,
+  frame: (
+    title-color: red.darken(40%),
+    body-color: red.lighten(90%),
+    border-color: black,
+    thickness: 2pt
+  ),
+  title: [#fig.caption.body],
+  fig.body
 )
 
 = 概述
@@ -99,10 +113,13 @@ ESP-IDF 需要安装一些必备工具，才能围绕 ESP32-C3 构建固件，�
 
 将 `get-started/hello_world` 工程复制至本地的 `~/esp` 目录下：
 
-```sh
+#figure(
+  sourcecode(frame: none)[```
 cd %userprofile%\esp
 xcopy /e /i %IDF_PATH%\examples\get-started\hello_world hello_world
-```
+  ```],
+  caption: "复制工程"
+)
 
 #info[ESP-IDF 的 examples 目录下有一系列示例工程，可以按照上述方法复制并运行其中的任何示例，也可以直接编译示例，无需进行复制。]
 
@@ -116,11 +133,14 @@ xcopy /e /i %IDF_PATH%\examples\get-started\hello_world hello_world
 
 请进入 `hello_world` 目录，设置 ESP32-C3 为目标芯片，然后运行工程配置工具 `menuconfig` 。
 
-```sh
+#figure(
+  sourcecode(frame: none)[```
 cd %userprofile%\esp\hello_world
 idf.py set-target esp32c3
 idf.py menuconfig
-```
+  ```],
+  caption: "配置代码"
+)
 
 打开一个新工程后，应首先使用 `idf.py set-target esp32c3` 设置“目标”芯片。注意，此操作将清除并初始化项目之前的编译和配置（如有）。也可以直接将“目标”配置为环境变量（此时可跳过该步骤）。
 
@@ -134,13 +154,17 @@ idf.py menuconfig
 
 请使用以下命令，编译烧录工程：
 
-```sh
+#figure(
+  sourcecode(frame: none)[```
 idf.py build
-```
+  ```],
+  caption: "编译构建项目命令"
+)
 
 运行以上命令可以编译应用程序和所有 ESP-IDF 组件，接着生成引导加载程序、分区表和应用程序二进制文件。
 
-```sh
+#figure(
+  sourcecode(frame: none)[```
 $ idf.py build
 Running cmake in directory /path/to/hello_world/build
 Executing "cmake -G Ninja --warn-uninitialized /path/to/hello_world"...
@@ -158,7 +182,9 @@ esptool.py v2.3.1
 Project build complete. To flash, run this command:
 ../../../components/esptool_py/esptool/esptool.py -p (PORT) -b 921600 write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x10000 build/hello_world.bin  build 0x1000 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin
 or run 'idf.py -p PORT flash'
-```
+  ```],
+  caption: "编译构建项目命令运行结果"
+)
 
 如果一切正常，编译完成后将生成 `.bin` 文件。
 
@@ -166,9 +192,12 @@ or run 'idf.py -p PORT flash'
 
 请运行以下命令，将刚刚生成的二进制文件烧录至 ESP32 开发板：
 
-```sh
+#figure(
+  sourcecode(frame: none)[```
 idf.py flash
-```
+  ```],
+  caption: "编译+烧录"
+)
 
 #info[勾选 `flash` 选项将自动编译并烧录工程，因此无需再运行 `idf.py build`。]
 
@@ -176,7 +205,8 @@ idf.py flash
 
 在烧录过程中，会看到类似如下的输出日志：
 
-```sh
+#figure(
+  sourcecode(frame: none)[```
 ...
 esptool.py --chip esp32 -p /dev/ttyUSB0 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 40m --flash_size 2MB 0x8000 partition_table/partition-table.bin 0x1000 bootloader/bootloader.bin 0x10000 hello_world.bin
 esptool.py v3.0-dev
@@ -212,9 +242,11 @@ Hash of data verified.
 Leaving...
 Hard resetting via RTS pin...
 Done
-```
+  ```],
+  caption: "输出日志"
+)
 
-如果一切顺利，烧录完成后，开发板将会复位，应用程序 "hello_world" 开始运行。
+如果一切顺利，烧录完成后，开发板将会复位，应用程序 `hello_world` 开始运行。
 
 == 监视输出
 
@@ -228,13 +260,14 @@ Done
 
 普通配置
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 gpio_config_t io_conf;
 // 禁用中断
 io_conf.intr_type = GPIO_INTR_DISABLE;
 // 设置GPIO为输出模式
 io_conf.mode = GPIO_MODE_OUTPUT;
-// 设置GPIO PIN脚
+// 设置GPIO PIN引脚为 GPIO1 和 GPIO2
 io_conf.pin_bit_mask = ((1ULL << GPIO_NUM_1) | (1ULL << GPIO_NUM_2));
 // 禁用下拉模式
 io_conf.pull_down_en = 0;
@@ -242,22 +275,29 @@ io_conf.pull_down_en = 0;
 io_conf.pull_up_en = 1;
 // 使用以上配置来配置GPIO
 gpio_config(&io_conf);
-```
+  ```],
+  caption: "一般GPIO配置"
+)
 
 有关中断的配置方法
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 // 上升沿触发中断
 io_conf.intr_type = GPIO_INTR_POSEDGE;
 // 设置为输入模式
 io_conf.mode = GPIO_MODE_INPUT;
+// 配置引脚
 io_conf.pin_bit_mask = (1ULL << GPIO_NUM_0);
 gpio_config(&io_conf);
-```
+  ```],
+  caption: "GPIO配置中断"
+)
 
 操作GPIO的API
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 // 将GPIO口设置为输入模式
 gpio_set_direction(GPIO_NUM_2, GPIO_MODE_INPUT);
 // 设置输出模式
@@ -267,9 +307,11 @@ gpio_set_level(GPIO_NUM_1, 1);
 gpio_set_level(GPIO_NUM_1, 0);
 // 获取GPIO的电平
 gpio_get_level(GPIO_NUM_2);
-```
+  ```],
+  caption: "操作GPIO引脚"
+)
 
-有了这些API，我们可以实现 IIC 协议了。然后就可以实现按键功能了。键盘电路图如下：
+有了这些API，我们可以实现 $I^2C$ 协议了。然后就可以实现按键功能了。键盘电路图如下：
 
 #figure(image("keyboard.png", width: 80%), caption: [键盘模块电路图])
 
@@ -277,7 +319,8 @@ gpio_get_level(GPIO_NUM_2);
 
 先在 `main` 文件夹中创建 `drivers` 文件夹，然后创建文件 `keyboard_driver.h` 。文件内容如下：
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 #ifndef __KEYBOARD_DRIVER_H_
 #define __KEYBOARD_DRIVER_H_
 
@@ -314,11 +357,14 @@ uint8_t KEYBOARD_read_key(void);
 void KEYBORAD_init(void);
 
 #endif
-```
+  ```],
+  caption: "操作GPIO引脚"
+)
 
 在 `drivers` 文件夹中创建 `keyboard_driver.c` 文件。内容如下：
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 #include "keyboard_driver.h"
 
 /// 延时函数，使用 FreeRTOS 的 API 进行包装
@@ -574,15 +620,18 @@ void KEYBORAD_init(void)
     io_conf.pin_bit_mask = (1ULL << SC12B_INT);
     gpio_config(&io_conf);
 }
-```
+  ```],
+  caption: "操作GPIO引脚"
+)
 
 驱动编写好之后，我们可以在主函数中和电容键盘进行通信了。当按下按键，会产生中断，通过处理中断来识别我们的按键。
 
-在 `smart-lock.c` 文件中，主函数是 `app_main` ，`ESP-IDF` 在编译整个项目的时候，会将 `app_main` 注册为一个任务。无需我们自己编写 `main` 函数。
+在 `smart-lock.c` 文件中，主函数是 #lineref(<entry-point>)：`app_main` ，`ESP-IDF` 在编译整个项目的时候，会将 `app_main` 注册为一个RTOS任务。无需我们自己编写 `main` 函数。
 
 `smart-lock.c` 文件内容如下。
 
-```c
+#figure(
+  sourcecode(frame: none, highlighted: (44,))[```
 // 全局变量，用来存储来自 GPIO 的中断事件
 static QueueHandle_t gpio_evt_queue = NULL;
 
@@ -614,7 +663,8 @@ static void ISR_QUEUE_Init(void)
 {
   // 创建一个队列来处理来自GPIO的中断事件
   gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
-  // 开启 process_isr 任务。这个任务的作用是轮训存储中断事件的队列，将队列中的事件
+  // 开启 process_isr 任务。
+  // 这个任务的作用是轮训存储中断事件的队列，将队列中的事件
   // 挨个出队列并进行处理。
   xTaskCreate(process_isr, "process_isr", 2048, NULL, 10, NULL);
 
@@ -625,11 +675,13 @@ static void ISR_QUEUE_Init(void)
 }
 
 // 主程序
-void app_main(void)
+void app_main(void) // <entry-point>
 {
   ISR_QUEUE_Init();
 }
-```
+  ```],
+  caption: "smart-lock.c"
+)
 
 #figure(image("process_isr.png", width: 80%), caption: [处理中断示意图])
 
@@ -651,7 +703,7 @@ RMT 外设通常支持以下场景：
 
 == RMT 符号的内存布局
 
-RMT 硬件定义了自己的数据模式，称为 *RMT 符号* 。下图展示了一个 RMT 符号的位字段：每个符号由两对两个值组成，每对中的第一个值是一个 15 位的值，表示信号持续时间，以 RMT 滴答计。每对中的第二个值是一个 1 位的值，表示信号的逻辑电平，即高电平或低电平。
+RMT 硬件定义了自己的数据模式，称为 `RMT 符号` 。下图展示了一个 RMT 符号的位字段：每个符号由两对两个值组成，每对中的第一个值是一个 15 位的值，表示信号持续时间，以 RMT 滴答计。每对中的第二个值是一个 1 位的值，表示信号的逻辑电平，即高电平或低电平。
 
 #figure(image("RMT-1.png", width: 80%), caption: [RMT 符号结构(L-信号电平)])
 
@@ -699,7 +751,8 @@ RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，�
 
 由于大部分代码都是示例代码。这里只给出新添加的部分，也就是点亮某一个灯的代码。
 
-```c
+#figure(
+  sourcecode(frame: none)[```c
 // `led_num` 参数是要点亮的灯的索引。`LED_NUMBERS == 12`，因为我们有 12 个灯。
 void light_led(uint8_t led_num)
 {
@@ -716,7 +769,12 @@ void light_led(uint8_t led_num)
     }
 
     // 将 RGB 值通过通道发送至 LED 灯。点亮灯。
-    ESP_ERROR_CHECK(rmt_transmit(led_chan, led_encoder, led_strip_pixels, sizeof(led_strip_pixels), &tx_config));
+    ESP_ERROR_CHECK(rmt_transmit(
+        led_chan,
+        led_encoder,
+        led_strip_pixels,
+        sizeof(led_strip_pixels),
+        &tx_config));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
 
     // 延时 100 毫秒
@@ -726,10 +784,17 @@ void light_led(uint8_t led_num)
     memset(led_strip_pixels, 0, sizeof(led_strip_pixels));
 
     // 再次发送，将灯灭掉。
-    ESP_ERROR_CHECK(rmt_transmit(led_chan, led_encoder, led_strip_pixels, sizeof(led_strip_pixels), &tx_config));
+    ESP_ERROR_CHECK(rmt_transmit(
+        led_chan,
+        led_encoder,
+        led_strip_pixels,
+        sizeof(led_strip_pixels),
+        &tx_config));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
 }
-```
+  ```],
+  caption: "点灯程序"
+)
 
 尝试编写代码调用点灯方法，将灯点亮。
 
