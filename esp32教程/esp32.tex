@@ -1046,20 +1046,69 @@ $k$ 的范围是 $0 \leq k \leq N-1$。
 
 关系如图 \ref{fig:xfyf} 。
 
-\subsection{采样定理}
-
-\begin{theorem}[采样定理]
-    想要完整的还原信号，采样频率 $f_s$ 必须大于信号的成分中最高频率的 2 倍。
-\end{theorem}
-
-
-
 \begin{figure}[!htb]
 \centering
 \includegraphics[width=0.9\textwidth]{xfyf.pdf}
 \caption{频域相乘和时域相乘的对应关系}
 \label{fig:xfyf}
 \end{figure}
+
+\subsection{采样定理}
+
+\begin{theorem}[采样定理]
+    想要完整的还原信号，采样频率 $f_s$ 必须大于信号的成分中最高频率的 2 倍。
+\end{theorem}
+
+我们来举例说明，对于一个正弦波，当每个周期只采样一个点时，那么只能得到直线。如图 \ref{fig:sampling_Fs_0.3} 所示。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{sampling_Fs_0.3.pdf}
+\caption{每个周期采样1个点}
+\label{fig:sampling_Fs_0.3}
+\end{figure}
+
+每个周期采样1.2个点，还是无法还原原始信号。如图 \ref{fig:sampling_Fs_0.36} 所示。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{sampling_Fs_0.36.pdf}
+\caption{每个周期采样1.2个点}
+\label{fig:sampling_Fs_0.36}
+\end{figure}
+
+继续加大采样率，每个周期采样 1.5 个点。也同样无法还原原始信号。如图所示 \ref{fig:sampling_Fs_0.45} 。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{sampling_Fs_0.45.pdf}
+\caption{每个周期采样1.5个点}
+\label{fig:sampling_Fs_0.45}
+\end{figure}
+
+继续加大采样率，我们发现每个周期采样 2 个点。就可以还原原始信号了。如图所示 \ref{fig:sampling_Fs_0.6} 。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{sampling_Fs_0.6.pdf}
+\caption{每个周期采样2个点}
+\label{fig:sampling_Fs_0.6}
+\end{figure}
+
+所以想要还原任意一个原始信号，采样率必须大于原始信号的最高频率成分的2倍才能做到这一点。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{max_freq.pdf}
+\caption{采样定理}
+\label{fig:max_freq}
+\end{figure}
+
+\begin{marker}
+    所以我们永远无法彻底还原一个方波信号，因为方波信号中存在无限大频率的成分。而我们的 ADC 是无法达到这个采样频率的。
+
+    我们在做心电信号采集时，由于人的心跳频率不会高于 $200Hz$ 。所以只要 ADC 的采样频率高于 $400Hz$ 就可以看出心跳的波形了。
+\end{marker}
 
 \begin{figure}[!htb]
 \centering
