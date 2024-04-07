@@ -797,7 +797,176 @@ RMT接收通道（RX Channel）的数据路径和控制路径如下图所示：
 
 RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，并将数据存储在内存中。还可以向接收器提供输入信号的基本特征，使其识别信号停止条件，并过滤掉信号干扰和噪声。RMT 外设还支持从基准信号中解调出高频载波信号。
 
-\section{补充知识：数字调制}
+\section{补充知识：信号处理}
+
+\subsection{正弦波定义}
+
+图 \ref{fig:amplitude_phase_period} 显示了正弦波的定义，包含幅度、相位和频率。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{amplitude_phase_period.pdf}
+\caption{正弦波信号}
+\label{fig:amplitude_phase_period}
+\end{figure}
+
+\subsection{时域和频域}
+
+图 \ref{fig:time_and_freq_domain_example_signals} 左侧是时域的图形，右侧是相同信号频域的图形。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{time_and_freq_domain_example_signals.png}
+\caption{时域和频域}
+\label{fig:time_and_freq_domain_example_signals}
+\end{figure}
+
+\subsection{周期信号是一系列正弦波的叠加}
+
+图 \ref{fig:summing_sinusoids} 显示了频率为1和频率为2的正弦波相加形成的波形。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{summing_sinusoids.pdf}
+\caption{频率为1和2的正弦波相加}
+\label{fig:summing_sinusoids}
+\end{figure}
+
+图 \ref{fig:fourier_series_triangle-0} $\rightarrow$ \ref{fig:fourier_series_triangle-9} 显示了三角波是如何由不同频率的正弦波叠加而成的。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-0.png}
+\caption{三角波的叠加过程，n = 1}
+\label{fig:fourier_series_triangle-0}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-1.png}
+\caption{三角波的叠加过程，n = 2}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-2.png}
+\caption{三角波的叠加过程，n = 3}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-3.png}
+\caption{三角波的叠加过程，n = 4}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-4.png}
+\caption{三角波的叠加过程，n = 5}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-5.png}
+\caption{三角波的叠加过程，n = 6}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-6.png}
+\caption{三角波的叠加过程，n = 7}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-7.png}
+\caption{三角波的叠加过程，n = 8}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-8.png}
+\caption{三角波的叠加过程，n = 9}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_triangle-9.png}
+\caption{三角波的叠加过程，n = 10}
+\label{fig:fourier_series_triangle-9}
+\end{figure}
+
+我们再来看一下方波信号的叠加，方波信号是由频率为1的正弦波到频率为无穷大的正弦波叠加而成的。图 \ref{fig:fourier_series_arbitrary_function-0} $\rightarrow$ \ref{fig:fourier_series_arbitrary_function-9} 显示了这一过程。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-0.png}
+\caption{方波的叠加过程-1}
+\label{fig:fourier_series_arbitrary_function-0}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-1.png}
+\caption{方波的叠加过程-2}
+\label{fig:fourier_series_arbitrary_function-1}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-2.png}
+\caption{方波的叠加过程-3}
+\label{fig:fourier_series_arbitrary_function-2}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-3.png}
+\caption{方波的叠加过程-4}
+\label{fig:fourier_series_arbitrary_function-3}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-4.png}
+\caption{方波的叠加过程-5}
+\label{fig:fourier_series_arbitrary_function-4}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-5.png}
+\caption{方波的叠加过程-6}
+\label{fig:fourier_series_arbitrary_function-5}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-6.png}
+\caption{方波的叠加过程-7}
+\label{fig:fourier_series_arbitrary_function-6}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-7.png}
+\caption{方波的叠加过程-8}
+\label{fig:fourier_series_arbitrary_function-7}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-8.png}
+\caption{方波的叠加过程-9}
+\label{fig:fourier_series_arbitrary_function-8}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.5\textwidth]{fourier_series_arbitrary_function-9.png}
+\caption{方波的叠加过程-10}
+\label{fig:fourier_series_arbitrary_function-9}
+\end{figure}
 
 \begin{figure}[!htb]
 \centering
