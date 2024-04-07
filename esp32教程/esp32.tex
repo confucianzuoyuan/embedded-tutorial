@@ -883,4 +883,141 @@ void light_led(uint8_t led_num)
 
 尝试编写代码调用点灯方法，将灯点亮。
 
+\chapter{语音模块}
+
+我们使用 WTN6170 作为语音模块外设。可以使用一根 GPIO 线来控制 WTN6170 。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{WTN6170.png}
+\caption{语音模块电路图}
+\end{figure}
+
+我们来编写初始化 GPIO 引脚的代码。
+
+\Colorbox{lightgrey}{\lstinline{AUDIO_BUSY_PIN}} 和 \Colorbox{lightgrey}{\lstinline{AUDIO_SDA_PIN}} 可查询电路图来进行配置。
+
+\begin{mycode}{语音模块GPIO引脚配置}
+gpio_config_t io_conf = {};
+// 禁用中断
+io_conf.intr_type = GPIO_INTR_DISABLE;
+// 设置为输出模式
+io_conf.mode = GPIO_MODE_OUTPUT;
+// 引脚是数据线
+io_conf.pin_bit_mask = (1ULL << AUDIO_SDA_PIN);
+gpio_config(&io_conf);
+
+// 禁用中断
+io_conf.intr_type = GPIO_INTR_DISABLE;
+// 设置为输入模式
+io_conf.mode = GPIO_MODE_INPUT;
+// 引脚是忙线
+io_conf.pin_bit_mask = (1ULL << AUDIO_BUSY_PIN);
+gpio_config(&io_conf);
+\end{mycode}
+
+给语音模块发送数据并播报的代码，通过发送不同的 \Colorbox{lightgrey}{\lstinline{uint8_t}} 数据，使语音模块播放不同的声音。具体参见语音模块文档。
+
+\begin{mycode}{播报语音代码}
+void Line_1A_WT588F(uint8_t DDATA)
+{
+    uint8_t S_DATA, j;
+    uint8_t B_DATA;
+    S_DATA = DDATA;
+    AUDIO_SDA_L;
+    (*@\Colorbox{red}{DELAY\_MS(10);}@*) (*@\tikz[overlay]{\draw[thick,red,->] (0,0.5ex) -- ++(0.5,0) node[right] {这个延时比较重要}}@*)
+    B_DATA = S_DATA & 0X01;
+    for (j = 0; j < 8; j++)
+    {
+        if (B_DATA == 1)
+        {
+            AUDIO_SDA_H;
+            DELAY_US(600); // 延时600us
+            AUDIO_SDA_L;
+            DELAY_US(200); // 延时200us
+        }
+        else
+        {
+            AUDIO_SDA_H;
+            DELAY_US(200); // 延时200us
+            AUDIO_SDA_L;
+            DELAY_US(600); // 延时600us
+        }
+        S_DATA = S_DATA >> 1;
+        B_DATA = S_DATA & 0X01;
+    }
+    AUDIO_SDA_H;
+    DELAY_MS(2);
+}
+\end{mycode}
+
+\chapter{电机驱动}
+
+电机用来开关锁。也就是通过驱动电机进行正转反转来开关锁。
+
+当然我们还是通过 GPIO 的拉高拉低来驱动电机。比较简单。
+
+电路图如下：
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{motor.png}
+\caption{电机模块电路图}
+\end{figure}
+
+初始化 GPIO 引脚代码
+
+\begin{mycode}{电机GPIO引脚初始化}
+void MOTOR_Init(void)
+{
+    gpio_config_t io_conf;
+    // 禁用中断
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    // 设置为输出模式
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    // 设置要用的两个引脚
+    io_conf.pin_bit_mask = ((1ULL << MOTOR_DRIVER_NUM_0) | (1ULL << MOTOR_DRIVER_NUM_1));
+    gpio_config(&io_conf);
+
+    // 最开始都输出低电平，这样就不转
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+}
+\end{mycode}
+
+开锁代码
+
+\begin{mycode}{控制电机转动来开关锁}
+void MOTOR_Open_lock(void)
+{
+    // 正转 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 1);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // 停止 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // 反转 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 1);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // 停止转动并播报语音
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    Line_1A_WT588F(25);
+}
+\end{mycode}
+
+\chapter{指纹模块}
+
+\chapter{蓝牙模块}
+
+\chapter{WIFI模块}
+
+\chapter{TCPIP服务}
+
 \end{document}

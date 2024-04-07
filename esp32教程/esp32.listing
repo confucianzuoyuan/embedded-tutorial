@@ -1,39 +1,22 @@
-// `led_num` 参数是要点亮的灯的索引。`LED_NUMBERS == 12`，因为我们有 12 个灯。
-void light_led(uint8_t led_num)
+void MOTOR_Open_lock(void)
 {
-    for (int i = 0; i < 3; i++)
-    {
-        // 构建 RGB 像素点
-        hue = led_num * 360 / LED_NUMBERS;
-        // 编码 RGB 值
-        led_strip_hsv2rgb(hue, 30, 30, &red, &green, &blue);
-        // 发送顺序 GREEN --> BLUE --> RED
-        led_strip_pixels[led_num * 3 + 0] = green;
-        led_strip_pixels[led_num * 3 + 1] = blue;
-        led_strip_pixels[led_num * 3 + 2] = red;
-    }
+    // 正转 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 1);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    // 将 RGB 值通过通道发送至 LED 灯。点亮灯。
-    ESP_ERROR_CHECK(rmt_transmit(
-        led_chan,
-        led_encoder,
-        led_strip_pixels,
-        sizeof(led_strip_pixels),
-        &tx_config));
-    ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
+    // 停止 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    // 延时 100 毫秒
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    // 反转 1 秒
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 1);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    // 清空像素矩阵
-    memset(led_strip_pixels, 0, sizeof(led_strip_pixels));
-
-    // 再次发送，将灯灭掉。
-    ESP_ERROR_CHECK(rmt_transmit(
-        led_chan,
-        led_encoder,
-        led_strip_pixels,
-        sizeof(led_strip_pixels),
-        &tx_config));
-    ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
+    // 停止转动并播报语音
+    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
+    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
+    Line_1A_WT588F(25);
 }
