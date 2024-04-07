@@ -1042,6 +1042,13 @@ $k$ 的范围是 $0 \leq k \leq N-1$。
 
 有了时域和频域的转换，我们就可以进行滤波了。也就是将指定的频率范围的正弦波信号过滤掉。可以看到将图 \ref{fig:filter} 中的上下两个频域函数相乘，就得到了滤波以后的信号的 \Colorbox{lightgrey}{\lstinline{频域函数}} 。
 
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{filter.pdf}
+\caption{频域相乘和时域相乘的对应关系}
+\label{fig:filter}
+\end{figure}
+
 那么两个频域函数 $X(f)$ 和 $Y(f)$ 相乘，也就是$X(f)Y(f)$该如何转换回时域呢？因为我们得针对时域函数进行滤波。
 
 关系如图 \ref{fig:xfyf} 。
