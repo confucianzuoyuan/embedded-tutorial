@@ -1110,6 +1110,44 @@ $k$ 的范围是 $0 \leq k \leq N-1$。
     我们在做心电信号采集时，由于人的心跳频率不会高于 $200Hz$ 。所以只要 ADC 的采样频率高于 $400Hz$ 就可以看出心跳的波形了。
 \end{marker}
 
+\subsection{数字调制}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{symbols.png}
+\caption{数字信号}
+\label{fig:symbols}
+\end{figure}
+
+以太网传输的信号如图 \ref{fig:ethernet} 。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{ethernet.pdf}
+\caption{以太网中的信号}
+\label{fig:ethernet}
+\end{figure}
+
+\begin{marker}
+    1. 在图 \ref{fig:ethernet} 中，每秒钟能够传输多少个 bit 呢？（bits per second, bps）
+    
+    答：$\frac{1}{8 \times 10^{-9}}\times 2 = 250Mbps$。
+
+    2. 需要多少根线才能达到1Gbps？
+
+    答：4根线。这也是以太网线缆采用的方案。
+
+    3. 如果某个调制方案可以有 16 个不同的电平值，那么每个符号可以表示多少个 bit 呢？
+
+    答：4个bit。
+
+    4. 16个不同的电平值，每个符号持续时间是8ns，那么带宽是多少bps？
+
+    答：$\frac{1}{8 \times 10^{-9}}\times 4 = 0.5Gbps$。
+\end{marker}
+
+\subsection{模拟调制}
+
 \begin{figure}[!htb]
 \centering
 \includegraphics[width=0.9\textwidth]{RMT-4.png}
