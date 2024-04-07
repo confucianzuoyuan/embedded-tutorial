@@ -1276,7 +1276,342 @@ void MOTOR_Open_lock(void)
 
 \chapter{指纹模块}
 
+ESP32使用串口和指纹模块进行通信。电路图如下：
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{fingerprint.png}
+\caption{指纹模块电路图}
+\end{figure}
+
+我们先来写头文件
+
+\begin{mycode}{指纹模块头文件}
+#ifndef __FINGERPRINT_DRIVER_H_
+#define __FINGERPRINT_DRIVER_H_
+
+#include "driver/uart.h"
+#include "driver/gpio.h"
+
+/// 下面的配置可以直接写死，也可以在 menuconfig 里面配置
+#define ECHO_TEST_TXD (CONFIG_EXAMPLE_UART_TXD)
+#define ECHO_TEST_RXD (CONFIG_EXAMPLE_UART_RXD)
+#define ECHO_TEST_RTS (UART_PIN_NO_CHANGE)
+#define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
+
+#define ECHO_UART_PORT_NUM (CONFIG_EXAMPLE_UART_PORT_NUM)
+#define ECHO_UART_BAUD_RATE (CONFIG_EXAMPLE_UART_BAUD_RATE)
+#define ECHO_TASK_STACK_SIZE (CONFIG_EXAMPLE_TASK_STACK_SIZE)
+
+#define BUF_SIZE (1024)
+
+#define TOUCH_INT GPIO_NUM_8
+
+/// 初始化指纹模块
+void FINGERPRINT_Init(void);
+
+/// 获取指纹芯片的序列号
+void get_chip_sn(void);
+
+/// 获取指纹图像
+int get_image(void);
+
+/// 获取指纹特征
+int gen_char(void);
+
+/// 搜索指纹
+int search(void);
+
+/// 读取指纹芯片配置参数
+void read_sys_params(void);
+
+#endif
+\end{mycode}
+
+然后编写头文件中接口的实现
+
+\begin{mycode}{指纹模块实现代码}
+#include "fingerprint_driver.h"
+
+void FINGERPRINT_Init(void)
+{
+    /* Configure parameters of an UART driver,
+     * communication pins and install the driver */
+    uart_config_t uart_config = {
+        .baud_rate = ECHO_UART_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    int intr_alloc_flags = 0;
+
+    ESP_ERROR_CHECK(uart_driver_install(
+        ECHO_UART_PORT_NUM,
+        BUF_SIZE * 2, 0, 0, NULL,
+        intr_alloc_flags));
+    ESP_ERROR_CHECK(uart_param_config(
+        ECHO_UART_PORT_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(
+        ECHO_UART_PORT_NUM,
+        ECHO_TEST_TXD,
+        ECHO_TEST_RXD,
+        ECHO_TEST_RTS,
+        ECHO_TEST_CTS));
+
+    // 中断
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_NEGEDGE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = (1ULL << TOUCH_INT);
+    io_conf.pull_up_en = 1;
+    gpio_config(&io_conf);
+
+    printf("指纹模块初始化成功。\r\n");
+}
+
+void get_chip_sn(void)
+{
+    vTaskDelay(200 / portTICK_PERIOD_MS);
+    uint8_t *data = (uint8_t *)malloc(BUF_SIZE);
+
+    // 获取芯片唯一序列号 0x34。确认码=00H 表示 OK；确认码=01H 表示收包有错。
+    uint8_t PS_GetChipSN[13] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x04, 0x34, 0x00, 0x00, 0x39};
+    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_GetChipSN, 13);
+
+    // Read data from the UART
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+
+    if (len)
+    {
+        if (data[6] == 0x07 && data[9] == 0x00)
+        {
+            printf("chip sn: %.32s\r\n", &data[10]);
+        }
+    }
+
+    free(data);
+}
+
+// 检测是否有手指放在模组上面
+int get_image(void)
+{
+    uint8_t *data = (uint8_t *)malloc(BUF_SIZE);
+
+    // 验证用获取图像 0x01，验证指纹时，探测手指，探测到后录入指纹图像存于图像缓冲区。返回确认码表示：录入成功、无手指等。
+    uint8_t PS_GetImageBuffer[12] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x03, 0x01, 0x00, 0x05};
+
+    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_GetImageBuffer, 12);
+
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+
+    int result = 0xFF;
+
+    if (len)
+    {
+        if (data[6] == 0x07)
+        {
+            if (data[9] == 0x00)
+            {
+                result = 0;
+            }
+            else if (data[9] == 0x01)
+            {
+                result = 1;
+            }
+            else if (data[9] == 0x02)
+            {
+                result = 2;
+            }
+        }
+    }
+
+    free(data);
+
+    return result;
+}
+
+int gen_char(void)
+{
+    uint8_t *data = (uint8_t *)malloc(BUF_SIZE);
+
+    // 生成特征 0x02，将图像缓冲区中的原始图像生成指纹特征文件存于模板缓冲区。
+    uint8_t PS_GenCharBuffer[13] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x04, 0x02, 0x01, 0x00, 0x08};
+
+    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_GenCharBuffer, 13);
+
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+
+    int result = 0xFF;
+
+    if (len)
+    {
+        if (data[6] == 0x07)
+        {
+            result = data[9];
+        }
+    }
+
+    free(data);
+
+    return result;
+}
+
+int search(void)
+{
+    uint8_t *data = (uint8_t *)malloc(BUF_SIZE);
+
+    // 搜索指纹 0x04，以模板缓冲区中的特征文件搜索整个或部分指纹库。若搜索到，则返回页码。加密等级设置为 0 或 1 情况下支持此功能。
+    uint8_t PS_SearchBuffer[17] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x08, 0x04, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x02, 0x0C};
+
+    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_SearchBuffer, 17);
+
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+
+    int result = 0xFF;
+
+    if (len)
+    {
+        if (data[6] == 0x07)
+        {
+            result = data[9];
+        }
+    }
+
+    free(data);
+
+    return result;
+}
+
+void read_sys_params(void)
+{
+    uint8_t *data = (uint8_t *)malloc(BUF_SIZE);
+
+    // 获取模组基本参数 0x0F，读取模组的基本参数（波特率，包大小等）。参数表前 16 个字节存放了模组的基本通讯和配置信息，称为模组的基本参数。
+    uint8_t PS_ReadSysPara[12] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x03, 0x0F, 0x00, 0x13};
+
+    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_ReadSysPara, 12);
+
+    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+
+    if (len)
+    {
+        if (data[6] == 0x07)
+        {
+            if (data[9] == 0x00)
+            {
+                int register_count = (data[10] << 8) | data[11];
+                printf("register count ==> %d\r\n", register_count);
+                int fingerprint_template_size = (data[12] << 8) | data[13];
+                printf("finger print template size ==> %d\r\n", fingerprint_template_size);
+                int fingerprint_library_size = (data[14] << 8) | data[15];
+                printf("finger print library size ==> %d\r\n", fingerprint_library_size);
+                int score_level = (data[16] << 8) | data[17];
+                printf("score level ==> %d\r\n", score_level);
+                // device address
+                printf("device address ==> 0x");
+                for (int i = 0; i < 4; i++)
+                {
+                    printf("%02X ", data[18 + i]);
+                }
+                printf("\r\n");
+                // data packet size
+                int packet_size = (data[22] << 8) | data[23];
+                if (packet_size == 0)
+                {
+                    printf("packet size ==> 32 bytes\r\n");
+                }
+                else if (packet_size == 1)
+                {
+                    printf("packet size ==> 64 bytes\r\n");
+                }
+                else if (packet_size == 2)
+                {
+                    printf("packet size ==> 128 bytes\r\n");
+                }
+                else if (packet_size == 3)
+                {
+                    printf("packet size ==> 256 bytes\r\n");
+                }
+                // baud rate
+                int baud_rate = (data[24] << 8) | data[25];
+                printf("baud rate ==> %d\r\n", 9600 * baud_rate);
+            }
+            else if (data[9] == 0x01)
+            {
+                printf("send packet error\r\n");
+            }
+        }
+    }
+
+    free(data);
+}
+\end{mycode}
+
 \chapter{蓝牙模块}
+
+实现了蓝牙功能和我们后面的 WIFI 功能，其实就可以自己编写代码作为固件烧录到 ESP32C3 里面了。这样也可以作为 STM32 的外设来使用了。这是 ESP32 所具有的独特的功能。
+
+蓝牙技术是一种无线通讯技术，广泛用于短距离内的数据交换。在蓝牙技术中，"Bluedroid"和"BLE"（Bluetooth Low Energy）是两个重要的概念，它们分别代表了蓝牙技术的不同方面。
+
+Bluedroid
+
+Bluedroid是Android操作系统用于实现蓝牙功能的软件栈。在Android 4.2版本中引入，Bluedroid取代了之前的BlueZ作为Android平台的蓝牙协议栈。Bluedroid是由Broadcom公司开发并贡献给Android开源项目的（AOSP），它支持经典蓝牙以及蓝牙低功耗（BLE）。
+
+Bluedroid协议栈设计目的是为了提供一个更轻量级、更高效的蓝牙协议栈，以适应移动设备对资源的紧张需求。它包括了蓝牙核心协议、各种蓝牙配置文件（如HSP、A2DP、AVRCP等）和BLE相关的服务和特性。
+
+BLE（Bluetooth Low Energy）
+
+BLE，即蓝牙低功耗技术，是蓝牙4.0规范中引入的一项重要技术。与传统的蓝牙技术（现在通常称为经典蓝牙）相比，BLE主要设计目标是实现极低的功耗，以延长设备的电池使用寿命，非常适合于需要长期运行但只需偶尔传输少量数据的应用场景，如健康和健身监测设备、智能家居设备等。
+
+BLE实现了一套与经典蓝牙不同的通信协议，包括低功耗的物理层、链路层协议以及应用层协议。BLE设备可以以极低的能耗状态长时间待机，只有在需要通信时才唤醒，这使得使用小型电池的设备也能达到数月甚至数年的电池寿命。
+
+总的来说，Bluedroid是Android平台上用于实现蓝牙通信功能的软件栈，而BLE则是蓝牙技术中的一种用于实现低功耗通信的标准。两者共同为Android设备提供了广泛的蓝牙通信能力，满足了不同应用场景下的需求。
+
+\section{GATT SERVER 代码讲解}
+
+在本文档中，我们回顾了在ESP32上实现蓝牙低功耗（BLE）通用属性配置文件（GATT）服务器的GATT SERVER示例代码。这个示例围绕两个应用程序配置文件和一系列事件设计，这些事件被处理以执行一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特性。此外，这个示例处理读写事件，包括一个写长特性请求，它将传入数据分割成块，以便数据能够适应属性协议（ATT）消息。本文档遵循程序工作流程，并分解代码以便理解每个部分和实现背后的原因。
+
+\subsection{头文件}
+
+\begin{mycode}{蓝牙功能头文件}
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_bt.h"
+#include "esp_gap_ble_api.h"
+#include "esp_gatts_api.h"
+#include "esp_bt_defs.h"
+#include "esp_bt_main.h"
+#include "esp_gatt_common_api.h"
+#include "sdkconfig.h"
+\end{mycode}
+
+这些头文件是运行FreeRTOS和底层系统组件所必需的，包括日志功能和一个用于在非易失性闪存中存储数据的库（也就是 flash）。我们对 \Colorbox{lightgrey}{\lstinline{esp_bt.h}}、\Colorbox{lightgrey}{\lstinline{esp_bt_main.h}}、\Colorbox{lightgrey}{\lstinline{esp_gap_ble_api.h}} 和 \Colorbox{lightgrey}{\lstinline{esp_gatts_api.h}} 特别感兴趣，这些文件暴露了实现此示例所需的BLE API。
+
+\begin{itemize}
+\item \Colorbox{lightgrey}{\lstinline{esp_bt.h}}：从主机侧实现蓝牙控制器和VHCI配置程序。
+\item \Colorbox{lightgrey}{\lstinline{esp_bt_main.h}}：实现Bluedroid栈协议的初始化和启用。
+\item \Colorbox{lightgrey}{\lstinline{esp_gap_ble_api.h}}：实现GAP配置，如广告和连接参数。
+\item \Colorbox{lightgrey}{\lstinline{esp_gatts_api.h}}：实现GATT配置，如创建服务和特性。
+\end{itemize}
+
+\begin{marker}
+VHCI（Virtual Host Controller Interface）是一个虚拟的主机控制器接口，它通常用于软件或硬件模拟中，以模拟主机控制器的行为。在不同的上下文中，VHCI可以指代不同的技术或应用，但基本概念相似，都是提供一个虚拟的接口来模拟实际的硬件或软件行为。
+
+在蓝牙技术领域，VHCI特别指向用于模拟蓝牙主机控制器（Host Controller）的接口。这可以用于蓝牙协议栈的开发和测试，允许开发者在没有实际蓝牙硬件的情况下模拟蓝牙设备的行为。通过VHCI，软件可以模拟发送和接收蓝牙数据包，从而测试蓝牙应用程序和服务的实现。
+
+在其他情况下，VHCI也可以用于USB（通用串行总线）技术，作为一个虚拟的USB主机控制器，来模拟USB设备的连接和通信。
+
+总的来说，VHCI是一个非常有用的工具，特别是在设备驱动和协议栈开发的早期阶段，它可以帮助开发者在没有实际硬件的情况下进行软件开发和测试。
+\end{marker}
 
 \chapter{WIFI模块}
 

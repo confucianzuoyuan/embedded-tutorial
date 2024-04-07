@@ -1,22 +1,16 @@
-void MOTOR_Open_lock(void)
-{
-    // 正转 1 秒
-    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
-    gpio_set_level(MOTOR_DRIVER_NUM_1, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    // 停止 1 秒
-    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
-    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    // 反转 1 秒
-    gpio_set_level(MOTOR_DRIVER_NUM_0, 1);
-    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    // 停止转动并播报语音
-    gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
-    gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
-    Line_1A_WT588F(25);
-}
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_bt.h"
+#include "esp_gap_ble_api.h"
+#include "esp_gatts_api.h"
+#include "esp_bt_defs.h"
+#include "esp_bt_main.h"
+#include "esp_gatt_common_api.h"
+#include "sdkconfig.h"
