@@ -719,4 +719,120 @@ void (*@\Colorbox{red}{app\_main}@*)(void) (*@\label{line:sp}@*) (*@\tikz[overla
 }
 \end{mycode}
 
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{process_isr.png}
+\caption{处理中断的流程}
+\end{figure}
+
+最后我们将编写好的代码添加到 \Colorbox{lightgrey}{\lstinline{main}} 文件夹下的 \Colorbox{lightgrey}{\lstinline{CMakeLists.txt}} 文件中。最终我们的项目的文件如下，\Colorbox{lightgrey}{\lstinline{SRCS}} 包含我们编写的 \Colorbox{lightgrey}{\lstinline{.c}} 文件。\Colorbox{lightgrey}{\lstinline{INCLUDE_DIRS}} 包含我们编写的驱动的文件夹。
+
+\begin{mycode}{CMakeLists.txt}
+idf_component_register(
+    SRCS
+        "smart-lock.c"
+        "drivers/keyboard_driver.c"
+        "drivers/led_driver.c"
+        "drivers/bluetooth_driver.c"
+        "drivers/wifi_driver.c"
+        "drivers/fingerprint_driver.c"
+        "drivers/tcp_driver.c"
+        "drivers/motor_driver.c"
+        "drivers/audio_driver.c"
+    INCLUDE_DIRS
+        "."
+        "./drivers"
+)
+\end{mycode}
+
+\chapter{红外遥控（RMT）}
+
+\section{简介}
+
+红外遥控（RMT）外设是一个红外发射和接收控制器。其数据格式灵活，可进一步扩展为多功能的通用收发器，发送或接收多种类型的信号。就网络分层而言，RMT 硬件包含物理层和数据链路层。物理层定义通信介质和比特信号的表示方式，数据链路层定义 RMT 帧的格式。RMT 帧的最小数据单元称为 RMT 符号，在驱动程序中以 \Colorbox{lightgrey}{\lstinline{rmt_symbol_word_t}} 表示。
+
+ESP32-C3 的 RMT 外设存在多个通道，每个通道都可以独立配置为发射器或接收器。
+
+RMT 外设通常支持以下场景：
+
+\begin{itemize}
+\item 发送或接收红外信号，支持所有红外线协议，如 NEC 协议
+\item 生成通用序列
+\item 有限或无限次地在硬件控制的循环中发送信号
+\item 多通道同时发送
+\item 将载波调制到输出信号或从输入信号解调载波
+\end{itemize}
+
+\section{RMT符号的内存布局}
+
+RMT硬件定义了自己的数据模式，称为RMT符号。下图展示了一个 RMT 符号的位字段：每个符号由两对两个值组成，每对中的第一个值是一个 15 位的值，表示信号持续时间，以 RMT 滴答计。每对中的第二个值是一个 1 位的值，表示信号的逻辑电平，即高电平或低电平。
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{RMT-1.png}
+\caption{RMT 符号结构(L-信号电平)}
+\end{figure}
+
+\section{RMT发射器概述}
+
+RMT 发送通道 (TX Channel) 的数据路径和控制路径如下图所示：
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{RMT-2.png}
+\caption{RMT发射器概述}
+\end{figure}
+
+驱动程序将用户数据编码为 RMT 数据格式，随后由 RMT 发射器根据编码生成波形。在将波形发送到 GPIO 管脚前，还可以调制高频载波信号。
+
+\section{RMT接收器概述}
+
+RMT接收通道（RX Channel）的数据路径和控制路径如下图所示：
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{RMT-3.png}
+\caption{RMT接收器概述}
+\end{figure}
+
+RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，并将数据存储在内存中。还可以向接收器提供输入信号的基本特征，使其识别信号停止条件，并过滤掉信号干扰和噪声。RMT 外设还支持从基准信号中解调出高频载波信号。
+
+\section{补充知识：数字调制}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{RMT-4.png}
+\caption{数字调制}
+\end{figure}
+
+\section{WS2812}
+
+文件夹 \Colorbox{lightgrey}{\lstinline{esp-idf/examples/peripherals/rmt/led_strip}} 是示例代码。修改 RMT 的 GPIO 引脚就可以直接部署运行。
+
+我们的开发板的原理是 ESP32-C3 芯片使用 RMT 模块的功能通过 GPIO 引脚发送波形。而波形是经过编码的 RGB 值。
+
+原理图如下：
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{ws2812.png}
+\caption{LED灯原理图}
+\end{figure}
+
+驱动大部分外设来说，几乎是通过 GPIO 的高低电平来处理，而 ws2812 正是需要这样的电平；RMT（远程控制）模块驱动程序可用于发送和接收红外遥控信号。由于RMT灵活性，驱动程序还可用于生成或接收许多其他类型的信号。由一系列脉冲组成的信号由RMT的发射器根据值列表生成。这些值定义脉冲持续时间和二进制级别。发射器还可以提供载波并用提供的脉冲对其进行调制；总的来说它就是一个中间件，就是通过 RMT 模块可以生成解码成包含脉冲持续时间和二进制电平的值的高低电平，从而实现发送和接收我们想要的信号。
+
+关于这个灯珠的资料网上多的是，我总的概述：
+
+\begin{enumerate}
+\item 每颗灯珠内置一个驱动芯片，我们只需要和这个驱动芯片通讯就可以达成调光的目的。所以，我们不需要用 PWM 调节。
+\item 它的管脚引出有 4 个，2 个是供电用的。还有 2 个是通讯的，DIN是输入，DOUT是输出。以及其是 5V 电压供电。
+\item 根据不同的厂商生产不同，驱动的方式有所不一样！下面发送数据顺序是：\Colorbox{lightgrey}{\lstinline{GREEN -- BLUE -- RED}} 。
+\end{enumerate}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{rmt-rgb.png}
+\caption{发送颜色的顺序}
+\end{figure}
+
 \end{document}

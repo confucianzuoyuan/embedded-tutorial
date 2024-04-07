@@ -1,47 +1,15 @@
-// 全局变量，用来存储来自 GPIO 的中断事件
-static QueueHandle_t gpio_evt_queue = NULL;
-
-static void IRAM_ATTR gpio_isr_handler(void *arg)
-{
-  uint32_t gpio_num = (uint32_t)arg;
-  // 将产生中断的GPIO引脚号入队列。
-  xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
-}
-
-// 轮询中断事件队列，然后挨个处理
-static void process_isr(void *arg)
-{
-  uint32_t io_num;
-  for (;;)
-  {
-    if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY))
-    {
-      if (io_num == 0)
-      {
-        uint8_t key = KEYBOARD_read_key();
-        printf("按下的键：%d\r\n", key);
-      }
-    }
-  }
-}
-
-static void ISR_QUEUE_Init(void)
-{
-  // 创建一个队列来处理来自GPIO的中断事件
-  gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
-  // 开启 process_isr 任务。
-  // 这个任务的作用是轮训存储中断事件的队列，将队列中的事件
-  // 挨个出队列并进行处理。
-  xTaskCreate(process_isr, "process_isr", 2048, NULL, 10, NULL);
-
-  gpio_install_isr_service(0);
-  // 将 SC12B_INT 引脚产生的中断交由 gpio_isr_handler 处理。
-  // 也就是说一旦 SC12B_INT 产生中断，则调用 gpio_isr_handler 函数。
-  gio_isr_handler_add(SC12B_INT, gpio_isr_handler, (void *)SC12B_INT);
-}
-
-// 主程序
-void (*@\Colorbox{red}{app\_main}@*)(void) (*@\label{line:sp}@*) (*@\tikz[overlay]{\draw[thick,red,->] (0,0.5ex) -- ++(0.5,0) node[right] {入口点函数}}@*)
-{
-  ISR_QUEUE_Init();
-}
+idf_component_register(
+    SRCS
+        "smart-lock.c"
+        "drivers/keyboard_driver.c"
+        "drivers/led_driver.c"
+        "drivers/bluetooth_driver.c"
+        "drivers/wifi_driver.c"
+        "drivers/fingerprint_driver.c"
+        "drivers/tcp_driver.c"
+        "drivers/motor_driver.c"
+        "drivers/audio_driver.c"
+    INCLUDE_DIRS
+        "."
+        "./drivers"
+)
