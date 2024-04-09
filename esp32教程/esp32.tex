@@ -1665,32 +1665,27 @@ idf.py flash
 \caption{语音模块电路图}
 \end{figure}
 
-我们来编写初始化 GPIO 引脚的代码。
+我们直接给出主程序代码，大家可以练习一下如何构建项目并编译烧写。参考前两个例子即可。
 
-\Colorbox{lightgrey}{\lstinline{AUDIO_BUSY_PIN}} 和 \Colorbox{lightgrey}{\lstinline{AUDIO_SDA_PIN}} 可查询电路图来进行配置。
+\begin{mycode}{audio\_main.c}
+#include "driver/gpio.h"
+#include "sys/unistd.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-\begin{mycode}{语音模块GPIO引脚配置}
-gpio_config_t io_conf = {};
-// 禁用中断
-io_conf.intr_type = GPIO_INTR_DISABLE;
-// 设置为输出模式
-io_conf.mode = GPIO_MODE_OUTPUT;
-// 引脚是数据线
-io_conf.pin_bit_mask = (1ULL << AUDIO_SDA_PIN);
-gpio_config(&io_conf);
+#define DELAY_US(i) usleep(i) // usleep(i)
 
-// 禁用中断
-io_conf.intr_type = GPIO_INTR_DISABLE;
-// 设置为输入模式
-io_conf.mode = GPIO_MODE_INPUT;
-// 引脚是忙线
-io_conf.pin_bit_mask = (1ULL << AUDIO_BUSY_PIN);
-gpio_config(&io_conf);
-\end{mycode}
+#define DELAY_MS(i) vTaskDelay(i / portTICK_PERIOD_MS)
 
-给语音模块发送数据并播报的代码，通过发送不同的 \Colorbox{lightgrey}{\lstinline{uint8_t}} 数据，使语音模块播放不同的声音。具体参见语音模块文档。
+#define AUDIO_SDA_PIN GPIO_NUM_9
+#define AUDIO_BUSY_PIN GPIO_NUM_7
 
-\begin{mycode}{播报语音代码}
+#define AUDIO_SDA_H gpio_set_level(AUDIO_SDA_PIN, 1)
+#define AUDIO_SDA_L gpio_set_level(AUDIO_SDA_PIN, 0)
+
+#define AUDIO_READ_BUSY gpio_get_level(AUDIO_BUSY_PIN)
+
 void Line_1A_WT588F(uint8_t DDATA)
 {
     uint8_t S_DATA, j;
@@ -1704,22 +1699,52 @@ void Line_1A_WT588F(uint8_t DDATA)
         if (B_DATA == 1)
         {
             AUDIO_SDA_H;
-            DELAY_US(600); // 延时600us
+            DELAY_US(600);
             AUDIO_SDA_L;
-            DELAY_US(200); // 延时200us
+            DELAY_US(200);
         }
         else
         {
             AUDIO_SDA_H;
-            DELAY_US(200); // 延时200us
+            DELAY_US(200);
             AUDIO_SDA_L;
-            DELAY_US(600); // 延时600us
+            DELAY_US(600);
         }
         S_DATA = S_DATA >> 1;
         B_DATA = S_DATA & 0X01;
     }
     AUDIO_SDA_H;
     DELAY_MS(2);
+}
+
+void AUDIO_Test(void)
+{
+    Line_1A_WT588F(85);
+    DELAY_MS(2000);
+    Line_1A_WT588F(86);
+    DELAY_MS(2000);
+    Line_1A_WT588F(69);
+    DELAY_MS(2000);
+}
+
+void AUDIO_Init(void)
+{
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = (1ULL << AUDIO_SDA_PIN);
+    gpio_config(&io_conf);
+
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = (1ULL << AUDIO_BUSY_PIN);
+    gpio_config(&io_conf);
+}
+
+void app_main(void)
+{
+    AUDIO_Init();
+    AUDIO_Test();
 }
 \end{mycode}
 
