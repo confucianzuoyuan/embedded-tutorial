@@ -1762,21 +1762,20 @@ void app_main(void)
 \caption{电机模块电路图}
 \end{figure}
 
-初始化 GPIO 引脚代码
+由于驱动电机只涉及到GPIO的基本操作，所以这里我们只给出两个关键代码。需要大家补全剩下的代码。并驱动电机转起来。
 
 \begin{mycode}{电机GPIO引脚初始化}
+#define MOTOR_DRIVER_NUM_0 GPIO_NUM_4
+#define MOTOR_DRIVER_NUM_1 GPIO_NUM_5
+
 void MOTOR_Init(void)
 {
     gpio_config_t io_conf;
-    // 禁用中断
     io_conf.intr_type = GPIO_INTR_DISABLE;
-    // 设置为输出模式
     io_conf.mode = GPIO_MODE_OUTPUT;
-    // 设置要用的两个引脚
     io_conf.pin_bit_mask = ((1ULL << MOTOR_DRIVER_NUM_0) | (1ULL << MOTOR_DRIVER_NUM_1));
     gpio_config(&io_conf);
 
-    // 最开始都输出低电平，这样就不转
     gpio_set_level(MOTOR_DRIVER_NUM_0, 0);
     gpio_set_level(MOTOR_DRIVER_NUM_1, 0);
 }
