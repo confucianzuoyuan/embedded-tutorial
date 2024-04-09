@@ -1,6 +1,7 @@
 \documentclass[lang=cn,newtx,10pt,scheme=chinese]{elegantbook}
 \usepackage{realboxes}
 \usepackage{forest}
+\usepackage{import}
 
 \title{ESP32教程}
 \author{左元}
@@ -743,15 +744,18 @@ void app_main(void)
 
 \begin{mycode}{编译并烧写程序}
 cd ~/esp/atguigu-gpio-example
+idf.py set-target esp32c3
 idf.py flash
 \end{mycode}
 
 然后就可以测试程序了。
 
 \begin{figure}[!htb]
-\centering
-\includegraphics[width=0.9\textwidth]{process_isr.png}
-\caption{处理中断的流程}
+    \centering
+    \scalebox{.5}{
+    \def\svgwidth{\columnwidth}
+    \import{figures/process_isr}{figure.pdf_tex}}
+    \caption{处理中断}
 \end{figure}
 
 \chapter{信号处理入门}
@@ -1260,51 +1264,396 @@ RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，�
 
 \section{代码实现}
 
-由于大部分代码都是示例代码。这里只给出新添加的部分，也就是点亮某一个灯的代码。
+首先我们看一下文件夹的目录结构。
 
-\begin{mycode}{点灯}
-// `led_num` 参数是要点亮的灯的索引。`LED_NUMBERS == 12`，因为我们有 12 个灯。
+\begin{tcolorbox}
+\begin{forest}
+  for tree={
+    font=\ttfamily,
+    grow'=0,
+    child anchor=west,
+    parent anchor=south,
+    anchor=west,
+    calign=first,
+    edge path={
+      \noexpand\path [draw, \forestoption{edge}]
+      (!u.south west) +(7.5pt,0) |- node[fill,inner sep=1.25pt] {} (.child anchor)\forestoption{edge label};
+    },
+    before typesetting nodes={
+      if n=1
+        {insert before={[,phantom]}}
+        {}
+    },
+    fit=band,
+    before computing xy={l=15pt},
+  }
+[atguigu-led-example
+  [main
+    [CMakeLists.txt]
+    [led\_main.c]
+  ]
+  [CMakeLists.txt]
+]
+\end{forest}
+\end{tcolorbox}
+
+先来编写 \Colorbox{lightgrey}{\lstinline{atguigu-led-example/CMakeLists.txt}} 文件。内容如下：
+
+\begin{mycode}{atguigu-led-example/CMakeLists.txt}
+cmake_minimum_required(VERSION 3.16)
+
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(atguigu_led_example)
+\end{mycode}
+
+然后编写 \Colorbox{lightgrey}{\lstinline{atguigu-led-example/main/CMakeLists.txt}} 文件。内容如下：
+
+\begin{mycode}{atguigu-led-example/main/CMakeLists.txt}
+idf_component_register(
+    SRCS "led_main.c"
+    INCLUDE_DIRS ""
+)
+\end{mycode}
+
+接下来我们就可以来正式编写 \Colorbox{lightgrey}{\lstinline{atguigu-led-example/main/led_main.c}} 文件的代码了。
+
+我们还是从上向下写代码。
+
+首先引入一些头文件。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+#include <inttypes.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+/// ESP32 错误处理的API
+#include "esp_check.h"
+/// RMT编码器相关API
+#include "driver/rmt_encoder.h"
+/// RMT发送数据的API
+#include "driver/rmt_tx.h"
+\end{mycode}
+
+我们的LED条带共有12个LED灯。而LED灯需要的波形的频率很高。我们定义两个宏。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+// 10MHz的分辨率，1 tick = 0.1us，LED条带需要高分辨率。
+#define RMT_LED_STRIP_RESOLUTION_HZ 10000000
+// 只需要一个引脚，引脚号为6。
+#define RMT_LED_STRIP_GPIO_NUM GPIO_NUM_6
+
+// 共12个LED灯。
+#define LED_NUMBERS 12
+\end{mycode}
+
+以下代码大部分来自示例代码。很多细节无需关心，只需要会修改可以实现我们的功能就可以了。
+
+我们定义几个结构体。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+// LED编码器配置结构体，主要配置编码器的频率。
+typedef struct
+{
+    uint32_t resolution;
+} led_strip_encoder_config_t;
+
+// 编码器结构体
+typedef struct
+{
+    rmt_encoder_t base;
+    rmt_encoder_t *bytes_encoder;
+    rmt_encoder_t *copy_encoder;
+    int state;
+    rmt_symbol_word_t reset_code;
+} rmt_led_strip_encoder_t;
+\end{mycode}
+
+初始化几个全局变量。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+// 日志前缀
+const char *TAG = "LED ENCODER";
+
+// 每个灯需要发送RGB三个颜色，所以一共发送的数量要乘以3。
+// 这个数组用来存放待发送的RGB像素值。
+uint8_t led_strip_pixels[LED_NUMBERS * 3];
+
+// 颜色的初始值。
+uint32_t red = 0;
+uint32_t green = 0;
+uint32_t blue = 0;
+uint16_t hue = 0;
+
+// LED通道
+rmt_channel_handle_t led_chan = NULL;
+// LED编码器
+rmt_encoder_handle_t led_encoder = NULL;
+// 发送配置，不进行循环发送
+rmt_transmit_config_t tx_config = {
+    .loop_count = 0,
+};
+\end{mycode}
+
+然后编写RMT编码LED条带的代码。这部分代码来自示例程序。无需进行任何更改。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+size_t rmt_encode_led_strip(rmt_encoder_t *encoder, rmt_channel_handle_t channel, const void *primary_data, size_t data_size, rmt_encode_state_t *ret_state)
+{
+    rmt_led_strip_encoder_t *led_encoder = __containerof(encoder, rmt_led_strip_encoder_t, base);
+    rmt_encoder_handle_t bytes_encoder = led_encoder->bytes_encoder;
+    rmt_encoder_handle_t copy_encoder = led_encoder->copy_encoder;
+    rmt_encode_state_t session_state = RMT_ENCODING_RESET;
+    rmt_encode_state_t state = RMT_ENCODING_RESET;
+    size_t encoded_symbols = 0;
+    switch (led_encoder->state)
+    {
+    case 0: // send RGB data
+        encoded_symbols += bytes_encoder->encode(bytes_encoder, channel, primary_data, data_size, &session_state);
+        if (session_state & RMT_ENCODING_COMPLETE)
+        {
+            led_encoder->state = 1; // switch to next state when current encoding session finished
+        }
+        if (session_state & RMT_ENCODING_MEM_FULL)
+        {
+            state |= RMT_ENCODING_MEM_FULL;
+            goto out; // yield if there's no free space for encoding artifacts
+        }
+    // fall-through
+    case 1: // send reset code
+        encoded_symbols += copy_encoder->encode(copy_encoder, channel, &led_encoder->reset_code,
+                                                sizeof(led_encoder->reset_code), &session_state);
+        if (session_state & RMT_ENCODING_COMPLETE)
+        {
+            led_encoder->state = RMT_ENCODING_RESET; // back to the initial encoding session
+            state |= RMT_ENCODING_COMPLETE;
+        }
+        if (session_state & RMT_ENCODING_MEM_FULL)
+        {
+            state |= RMT_ENCODING_MEM_FULL;
+            goto out; // yield if there's no free space for encoding artifacts
+        }
+    }
+out:
+    *ret_state = state;
+    return encoded_symbols;
+}
+\end{mycode}
+
+删除编码器的代码。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+esp_err_t rmt_del_led_strip_encoder(rmt_encoder_t *encoder)
+{
+    rmt_led_strip_encoder_t *led_encoder = __containerof(encoder, rmt_led_strip_encoder_t, base);
+    rmt_del_encoder(led_encoder->bytes_encoder);
+    rmt_del_encoder(led_encoder->copy_encoder);
+    free(led_encoder);
+    return ESP_OK;
+}
+\end{mycode}
+
+重置编码器的代码。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+esp_err_t rmt_led_strip_encoder_reset(rmt_encoder_t *encoder)
+{
+    rmt_led_strip_encoder_t *led_encoder = __containerof(encoder, rmt_led_strip_encoder_t, base);
+    rmt_encoder_reset(led_encoder->bytes_encoder);
+    rmt_encoder_reset(led_encoder->copy_encoder);
+    led_encoder->state = RMT_ENCODING_RESET;
+    return ESP_OK;
+}
+\end{mycode}
+
+新建编码器的函数。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+esp_err_t rmt_new_led_strip_encoder(const led_strip_encoder_config_t *config, rmt_encoder_handle_t *ret_encoder)
+{
+    esp_err_t ret = ESP_OK;
+    rmt_led_strip_encoder_t *led_encoder = NULL;
+    ESP_GOTO_ON_FALSE(config && ret_encoder, ESP_ERR_INVALID_ARG, err, TAG, "invalid argument");
+    led_encoder = calloc(1, sizeof(rmt_led_strip_encoder_t));
+    ESP_GOTO_ON_FALSE(led_encoder, ESP_ERR_NO_MEM, err, TAG, "no mem for led strip encoder");
+    led_encoder->base.encode = rmt_encode_led_strip;
+    led_encoder->base.del = rmt_del_led_strip_encoder;
+    led_encoder->base.reset = rmt_led_strip_encoder_reset;
+    // different led strip might have its own timing requirements, following parameter is for WS2812
+    rmt_bytes_encoder_config_t bytes_encoder_config = {
+        .bit0 = {
+            .level0 = 1,
+            .duration0 = 0.3 * config->resolution / 1000000, // T0H=0.3us
+            .level1 = 0,
+            .duration1 = 0.9 * config->resolution / 1000000, // T0L=0.9us
+        },
+        .bit1 = {
+            .level0 = 1,
+            .duration0 = 0.9 * config->resolution / 1000000, // T1H=0.9us
+            .level1 = 0,
+            .duration1 = 0.3 * config->resolution / 1000000, // T1L=0.3us
+        },
+        .flags.msb_first = 1 // WS2812 transfer bit order: G7...G0R7...R0B7...B0
+    };
+    ESP_GOTO_ON_ERROR(rmt_new_bytes_encoder(&bytes_encoder_config, &led_encoder->bytes_encoder), err, TAG, "create bytes encoder failed");
+    rmt_copy_encoder_config_t copy_encoder_config = {};
+    ESP_GOTO_ON_ERROR(rmt_new_copy_encoder(&copy_encoder_config, &led_encoder->copy_encoder), err, TAG, "create copy encoder failed");
+
+    uint32_t reset_ticks = config->resolution / 1000000 * 50 / 2; // reset code duration defaults to 50us
+    led_encoder->reset_code = (rmt_symbol_word_t){
+        .level0 = 0,
+        .duration0 = reset_ticks,
+        .level1 = 0,
+        .duration1 = reset_ticks,
+    };
+    *ret_encoder = &led_encoder->base;
+    return ESP_OK;
+err:
+    if (led_encoder)
+    {
+        if (led_encoder->bytes_encoder)
+        {
+            rmt_del_encoder(led_encoder->bytes_encoder);
+        }
+        if (led_encoder->copy_encoder)
+        {
+            rmt_del_encoder(led_encoder->copy_encoder);
+        }
+        free(led_encoder);
+    }
+    return ret;
+}
+\end{mycode}
+
+然后编写将 HSV 颜色转换成 RGB 颜色的代码。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+void led_strip_hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t *g, uint32_t *b)
+{
+    h %= 360; // h -> [0,360]
+    uint32_t rgb_max = v * 2.55f;
+    uint32_t rgb_min = rgb_max * (100 - s) / 100.0f;
+
+    uint32_t i = h / 60;
+    uint32_t diff = h % 60;
+
+    // RGB adjustment amount by hue
+    uint32_t rgb_adj = (rgb_max - rgb_min) * diff / 60;
+
+    switch (i)
+    {
+    case 0:
+        *r = rgb_max;
+        *g = rgb_min + rgb_adj;
+        *b = rgb_min;
+        break;
+    case 1:
+        *r = rgb_max - rgb_adj;
+        *g = rgb_max;
+        *b = rgb_min;
+        break;
+    case 2:
+        *r = rgb_min;
+        *g = rgb_max;
+        *b = rgb_min + rgb_adj;
+        break;
+    case 3:
+        *r = rgb_min;
+        *g = rgb_max - rgb_adj;
+        *b = rgb_max;
+        break;
+    case 4:
+        *r = rgb_min + rgb_adj;
+        *g = rgb_min;
+        *b = rgb_max;
+        break;
+    default:
+        *r = rgb_max;
+        *g = rgb_min;
+        *b = rgb_max - rgb_adj;
+        break;
+    }
+}
+\end{mycode}
+
+然后编写 RMT 初始化的代码。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+void RMT_Init(void)
+{
+    rmt_tx_channel_config_t tx_chan_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT, // 选择时钟源
+        .gpio_num = RMT_LED_STRIP_GPIO_NUM, // GPIO引脚设置
+        .mem_block_symbols = 64, // increase the block size can make the LED less flickering
+        .resolution_hz = RMT_LED_STRIP_RESOLUTION_HZ,
+        .trans_queue_depth = 4, // set the number of transactions that can be pending in the background
+    };
+    ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &led_chan));
+
+    led_strip_encoder_config_t encoder_config = {
+        .resolution = RMT_LED_STRIP_RESOLUTION_HZ,
+    };
+    ESP_ERROR_CHECK(rmt_new_led_strip_encoder(&encoder_config, &led_encoder));
+
+    ESP_ERROR_CHECK(rmt_enable(led_chan));
+}
+\end{mycode}
+
+以上代码基本都是来自示例代码。接下来我们自己写点亮某一个灯的代码。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
 void light_led(uint8_t led_num)
 {
     for (int i = 0; i < 3; i++)
     {
-        // 构建 RGB 像素点
+        // 构建 RGB 像素值。
         hue = led_num * 360 / LED_NUMBERS;
-        // 编码 RGB 值
         led_strip_hsv2rgb(hue, 30, 30, &red, &green, &blue);
-        // 发送顺序 GREEN --> BLUE --> RED
         led_strip_pixels[led_num * 3 + 0] = green;
         led_strip_pixels[led_num * 3 + 1] = blue;
         led_strip_pixels[led_num * 3 + 2] = red;
     }
 
-    // 将 RGB 值通过通道发送至 LED 灯。点亮灯。
-    ESP_ERROR_CHECK(rmt_transmit(
-        led_chan,
-        led_encoder,
-        led_strip_pixels,
-        sizeof(led_strip_pixels),
-        &tx_config));
+    // 将 RGB 像素值发送到 LED 灯。
+    ESP_ERROR_CHECK(rmt_transmit(led_chan, led_encoder, led_strip_pixels, sizeof(led_strip_pixels), &tx_config));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
 
-    // 延时 100 毫秒
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
-    // 清空像素矩阵
+    // 将像素数组置为0。
     memset(led_strip_pixels, 0, sizeof(led_strip_pixels));
 
-    // 再次发送，将灯灭掉。
-    ESP_ERROR_CHECK(rmt_transmit(
-        led_chan,
-        led_encoder,
-        led_strip_pixels,
-        sizeof(led_strip_pixels),
-        &tx_config));
+    // 再次发送RGB像素值，熄灭LED灯。
+    ESP_ERROR_CHECK(rmt_transmit(led_chan, led_encoder, led_strip_pixels, sizeof(led_strip_pixels), &tx_config));
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(led_chan, portMAX_DELAY));
 }
 \end{mycode}
 
-尝试编写代码调用点灯方法，将灯点亮。
+然后编写入口函数。
+
+\begin{mycode}{atguigu-led-example/main/led\_main.c}
+void Delay_ms(uint32_t time)
+{
+    vTaskDelay(time / portTICK_PERIOD_MS);
+}
+
+void app_main(void)
+{
+    RMT_Init();
+    for (int i = 0; i < LED_NUMBERS; i++)
+    {
+        light_led(i);
+        Delay_ms(1000);
+    }
+}
+\end{mycode}
+
+然后编译并烧写程序。
+
+\begin{mycode}{编译并烧写程序}
+cd ~/esp/atguigu-led-example
+idf.py set-target esp32c3
+idf.py flash
+\end{mycode}
 
 \chapter{语音模块}
 

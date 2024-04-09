@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="189.39516mm"
+   height="102.86775mm"
+   viewBox="0 0 189.39516 102.86775"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3.2 (091e20ef0f, 2023-11-25, custom)"
+   sodipodi:docname="figure.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="1.0053654"
+     inkscape:cx="378.9667"
+     inkscape:cy="133.28488"
+     inkscape:window-width="1920"
+     inkscape:window-height="1008"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <marker
+       style="overflow:visible"
+       id="Triangle"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="Triangle arrow"
+       markerWidth="2"
+       markerHeight="2"
+       viewBox="0 0 1 1"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.5)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path135" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="ArrowWideRounded"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="Wide, rounded arrow"
+       markerWidth="3"
+       markerHeight="3"
+       viewBox="0 0 1 1"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="xMidYMid">
+      <path
+         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:round"
+         d="M 3,-3 0,0 3,3"
+         transform="rotate(180,0.125,0)"
+         sodipodi:nodetypes="ccc"
+         id="path2" />
+    </marker>
+  </defs>
+  <g
+     inkscape:label="图层 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-8.5510318,-49.553797)">
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1"
+       cx="22.045675"
+       cy="101.65511"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-5"
+       cx="39.164223"
+       cy="101.65511"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-2"
+       cx="57.020073"
+       cy="101.65511"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-7"
+       cx="22.045675"
+       cy="122.45399"
+       r="5.210526" />
+    <circle
+       style="fill:#ff00ff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-5-0"
+       cx="39.164223"
+       cy="122.45399"
+       r="5.210526" />
+    <circle
+       style="fill:#ff00ff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-5-0-9"
+       cx="104.02005"
+       cy="55.489307"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-2-9"
+       cx="57.020073"
+       cy="122.45399"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-6"
+       cx="22.045675"
+       cy="142.38153"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-5-2"
+       cx="39.164223"
+       cy="142.38153"
+       r="5.210526" />
+    <circle
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="path1-2-6"
+       cx="57.020073"
+       cy="142.38153"
+       r="5.210526" />
+    <rect
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.209683;stroke-opacity:1"
+       id="rect1"
+       width="60.534225"
+       height="60.534222"
+       x="8.6558733"
+       y="91.782486" />
+    <rect
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       id="rect2"
+       width="101.41917"
+       height="11.351503"
+       x="96.394737"
+       y="49.686089" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1;marker-end:url(#ArrowWideRounded)"
+       d="M 35.557398,117.7563 C 7.4602427,46.812062 93.742567,54.107299 96.115602,53.873119"
+       id="path4"
+       sodipodi:nodetypes="cc" />
+    <text
+       xml:space="preserve"
+       style="font-size:3.52778px;fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       x="127.28571"
+       y="56.385338"
+       id="text4"><tspan
+         sodipodi:role="line"
+         id="tspan4"
+         style="font-size:3.52778px;stroke-width:0.264583"
+         x="127.28571"
+         y="56.385338">gpio\_event\_queue</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:3.52777px;fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1"
+       x="14.211251"
+       y="53.423779"
+       id="text5"><tspan
+         sodipodi:role="line"
+         style="stroke-width:0.264583"
+         x="14.211251"
+         y="53.423779"
+         id="tspan6">触发gpio\_isr\_handler执行，</tspan><tspan
+         sodipodi:role="line"
+         style="stroke-width:0.264583"
+         x="14.211251"
+         y="57.833492"
+         id="tspan7">入队列 </tspan></text>
+    <path
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.264583;stroke-opacity:1;marker-end:url(#Triangle)"
+       d="m 138.95445,80.530424 c -14.47442,-8.421484 -17.10613,-17.895652 5.5266,-18.158822 22.63273,-0.263171 18.94833,2.631713 9.21099,20.001021"
+       id="path7"
+       sodipodi:nodetypes="csc" />
+    <text
+       xml:space="preserve"
+       style="font-size:3.52777px;fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.265;stroke-dasharray:none;stroke-opacity:1"
+       x="124.74321"
+       y="88.42556"
+       id="text8"><tspan
+         sodipodi:role="line"
+         id="tspan8"
+         style="stroke-width:0.265;stroke-dasharray:none"
+         x="124.74321"
+         y="88.42556">process\_isr 一直轮询队列，</tspan><tspan
+         sodipodi:role="line"
+         style="stroke-width:0.265;stroke-dasharray:none"
+         x="124.74321"
+         y="92.835274"
+         id="tspan9">事件出队列后处理</tspan></text>
+  </g>
+</svg>
