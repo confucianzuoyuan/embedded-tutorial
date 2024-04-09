@@ -1808,7 +1808,7 @@ void MOTOR_Open_lock(void)
 }
 \end{mycode}
 
-\chapter{指纹模块}
+\chapter{串口通信}
 
 ESP32使用串口和指纹模块进行通信。电路图如下：
 
@@ -1817,6 +1817,89 @@ ESP32使用串口和指纹模块进行通信。电路图如下：
 \includegraphics[width=0.9\textwidth]{fingerprint.png}
 \caption{指纹模块电路图}
 \end{figure}
+
+\section{串口收发简单示例}
+
+我们先来写一个简单的串口示例程序。
+
+\begin{mycode}{控制电机转动来开关锁}
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "driver/uart.h"
+#include "string.h"
+#include "driver/gpio.h"
+
+static const int RX_BUF_SIZE = 1024;
+
+#define TXD_PIN (GPIO_NUM_20)
+#define RXD_PIN (GPIO_NUM_21)
+
+void init(void)
+{
+    const uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    // We won't use a buffer for sending data.
+    uart_driver_install(UART_NUM_1, RX_BUF_SIZE * 2, 0, 0, NULL, 0);
+    uart_param_config(UART_NUM_1, &uart_config);
+    uart_set_pin(UART_NUM_1, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+}
+
+int sendData(const char *logName, const char *data)
+{
+    const int len = strlen(data);
+    const int txBytes = uart_write_bytes(UART_NUM_1, data, len);
+    ESP_LOGI(logName, "Wrote %d bytes", txBytes);
+    return txBytes;
+}
+
+static void tx_task(void *arg)
+{
+    static const char *TX_TASK_TAG = "TX_TASK";
+    esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
+    while (1)
+    {
+        sendData(TX_TASK_TAG, "Hello world");
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+}
+
+static void rx_task(void *arg)
+{
+    static const char *RX_TASK_TAG = "RX_TASK";
+    esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
+    uint8_t *data = (uint8_t *)malloc(RX_BUF_SIZE + 1);
+    while (1)
+    {
+        const int rxBytes = uart_read_bytes(UART_NUM_1, data, RX_BUF_SIZE, 1000 / portTICK_PERIOD_MS);
+        if (rxBytes > 0)
+        {
+            data[rxBytes] = 0;
+            ESP_LOGI(RX_TASK_TAG, "Read %d bytes: '%s'", rxBytes, data);
+            ESP_LOG_BUFFER_HEXDUMP(RX_TASK_TAG, data, rxBytes, ESP_LOG_INFO);
+        }
+    }
+    free(data);
+}
+
+void app_main(void)
+{
+    init();
+    xTaskCreate(rx_task, "uart_rx_task", 1024 * 2, NULL, configMAX_PRIORITIES, NULL);
+    xTaskCreate(tx_task, "uart_tx_task", 1024 * 2, NULL, configMAX_PRIORITIES - 1, NULL);
+}
+\end{mycode}
+
+有了以上的基础，我们就可以来实现指纹模块的驱动程序了。
+
+\section{指纹模块}
 
 我们先来写头文件
 
@@ -1828,18 +1911,12 @@ ESP32使用串口和指纹模块进行通信。电路图如下：
 #include "driver/gpio.h"
 
 /// 下面的配置可以直接写死，也可以在 menuconfig 里面配置
-#define ECHO_TEST_TXD (CONFIG_EXAMPLE_UART_TXD)
-#define ECHO_TEST_RXD (CONFIG_EXAMPLE_UART_RXD)
-#define ECHO_TEST_RTS (UART_PIN_NO_CHANGE)
-#define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
-
-#define ECHO_UART_PORT_NUM (CONFIG_EXAMPLE_UART_PORT_NUM)
-#define ECHO_UART_BAUD_RATE (CONFIG_EXAMPLE_UART_BAUD_RATE)
-#define ECHO_TASK_STACK_SIZE (CONFIG_EXAMPLE_TASK_STACK_SIZE)
+#define TXD_PIN (GPIO_NUM_20)
+#define RXD_PIN (GPIO_NUM_21)
 
 #define BUF_SIZE (1024)
 
-#define TOUCH_INT GPIO_NUM_8
+#define TOUCH_INT GPIO_NUM_10
 
 /// 初始化指纹模块
 void FINGERPRINT_Init(void);
@@ -1872,7 +1949,7 @@ void FINGERPRINT_Init(void)
     /* Configure parameters of an UART driver,
      * communication pins and install the driver */
     uart_config_t uart_config = {
-        .baud_rate = ECHO_UART_BAUD_RATE,
+        .baud_rate = 57600,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -1882,17 +1959,17 @@ void FINGERPRINT_Init(void)
     int intr_alloc_flags = 0;
 
     ESP_ERROR_CHECK(uart_driver_install(
-        ECHO_UART_PORT_NUM,
+        UART_NUM_1,
         BUF_SIZE * 2, 0, 0, NULL,
         intr_alloc_flags));
     ESP_ERROR_CHECK(uart_param_config(
-        ECHO_UART_PORT_NUM, &uart_config));
+        UART_NUM_1, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(
-        ECHO_UART_PORT_NUM,
-        ECHO_TEST_TXD,
-        ECHO_TEST_RXD,
-        ECHO_TEST_RTS,
-        ECHO_TEST_CTS));
+        UART_NUM_1,
+        TXD_PIN,
+        RXD_PIN,
+        UART_PIN_NO_CHANGE,
+        UART_PIN_NO_CHANGE));
 
     // 中断
     gpio_config_t io_conf;
@@ -1912,10 +1989,10 @@ void get_chip_sn(void)
 
     // 获取芯片唯一序列号 0x34。确认码=00H 表示 OK；确认码=01H 表示收包有错。
     uint8_t PS_GetChipSN[13] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x04, 0x34, 0x00, 0x00, 0x39};
-    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_GetChipSN, 13);
+    uart_write_bytes(UART_NUM_1, (const char *)PS_GetChipSN, 13);
 
     // Read data from the UART
-    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+    int len = uart_read_bytes(UART_NUM_1, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
 
     if (len)
     {
@@ -1936,9 +2013,9 @@ int get_image(void)
     // 验证用获取图像 0x01，验证指纹时，探测手指，探测到后录入指纹图像存于图像缓冲区。返回确认码表示：录入成功、无手指等。
     uint8_t PS_GetImageBuffer[12] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x03, 0x01, 0x00, 0x05};
 
-    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_GetImageBuffer, 12);
+    uart_write_bytes(UART_NUM_1, (const char *)PS_GetImageBuffer, 12);
 
-    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+    int len = uart_read_bytes(UART_NUM_1, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
 
     int result = 0xFF;
 
@@ -1973,9 +2050,9 @@ int gen_char(void)
     // 生成特征 0x02，将图像缓冲区中的原始图像生成指纹特征文件存于模板缓冲区。
     uint8_t PS_GenCharBuffer[13] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x04, 0x02, 0x01, 0x00, 0x08};
 
-    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_GenCharBuffer, 13);
+    uart_write_bytes(UART_NUM_1, (const char *)PS_GenCharBuffer, 13);
 
-    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+    int len = uart_read_bytes(UART_NUM_1, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
 
     int result = 0xFF;
 
@@ -1999,9 +2076,9 @@ int search(void)
     // 搜索指纹 0x04，以模板缓冲区中的特征文件搜索整个或部分指纹库。若搜索到，则返回页码。加密等级设置为 0 或 1 情况下支持此功能。
     uint8_t PS_SearchBuffer[17] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x08, 0x04, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x02, 0x0C};
 
-    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_SearchBuffer, 17);
+    uart_write_bytes(UART_NUM_1, (const char *)PS_SearchBuffer, 17);
 
-    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+    int len = uart_read_bytes(UART_NUM_1, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
 
     int result = 0xFF;
 
@@ -2025,9 +2102,9 @@ void read_sys_params(void)
     // 获取模组基本参数 0x0F，读取模组的基本参数（波特率，包大小等）。参数表前 16 个字节存放了模组的基本通讯和配置信息，称为模组的基本参数。
     uint8_t PS_ReadSysPara[12] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x03, 0x0F, 0x00, 0x13};
 
-    uart_write_bytes(ECHO_UART_PORT_NUM, (const char *)PS_ReadSysPara, 12);
+    uart_write_bytes(UART_NUM_1, (const char *)PS_ReadSysPara, 12);
 
-    int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
+    int len = uart_read_bytes(UART_NUM_1, data, (BUF_SIZE - 1), 2000 / portTICK_PERIOD_MS);
 
     if (len)
     {
