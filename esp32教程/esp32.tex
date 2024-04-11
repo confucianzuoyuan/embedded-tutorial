@@ -2188,30 +2188,79 @@ VHCI（Virtual Host Controller Interface）是一个虚拟的主机控制器接�
 入口函数是 \Colorbox{lightgrey}{\lstinline{app_main()}} 函数。
 
 \begin{mycode}{入口函数}
-void app_main()
+void app_main(void)
 {
     esp_err_t ret;
+
     // Initialize NVS.
-    // 初始化flash，很重要。
     ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES
-        || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
 
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    esp_bt_controller_init(&bt_cfg);
-    esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    esp_bluedroid_init();
-    esp_bluedroid_enable();
+    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
-    esp_ble_gatts_register_callback(gatts_event_handler);
-    esp_ble_gap_register_callback(gap_event_handler);
-    esp_ble_gatts_app_register(PROFILE_A_APP_ID);
-    esp_ble_gatts_app_register(PROFILE_B_APP_ID);
-    esp_ble_gatt_set_local_mtu(512);
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    ret = esp_bt_controller_init(&bt_cfg);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "%s initialize controller failed: %s\n", __func__, esp_err_to_name(ret));
+        return;
+    }
+
+    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
+        return;
+    }
+    ret = esp_bluedroid_init();
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "%s init bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
+        return;
+    }
+    ret = esp_bluedroid_enable();
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "%s enable bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
+        return;
+    }
+
+    ret = esp_ble_gatts_register_callback(gatts_event_handler);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "gatts register error, error code = %x", ret);
+        return;
+    }
+    ret = esp_ble_gap_register_callback(gap_event_handler);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "gap register error, error code = %x", ret);
+        return;
+    }
+    ret = esp_ble_gatts_app_register(PROFILE_A_APP_ID);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
+        return;
+    }
+    ret = esp_ble_gatts_app_register(PROFILE_B_APP_ID);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TAG, "gatts app register error, error code = %x", ret);
+        return;
+    }
+    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(500);
+    if (local_mtu_ret)
+    {
+        ESP_LOGE(GATTS_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
+    }
+
+    return;
 }
 \end{mycode}
 
@@ -2285,7 +2334,7 @@ GATT是基于BLE（Bluetooth Low Energy，蓝牙低能耗）技术的一种协�
 
 \begin{figure}[!htb]
 \centering
-\includegraphics[width=0.9\textwidth]{GATT_Server_Figure_1.png}
+\includegraphics[width=0.9\textwidth]{figures/GATT_SERVER_1.pdf}
 \caption{GATT服务器}
 \end{figure}
 
@@ -2329,10 +2378,13 @@ struct gatts_profile_inst {
 应用程序配置文件存储在一个数组中，并分配了相应的回调函数 \Colorbox{lightgrey}{\lstinline{gatts_profile_a_event_handler()}} 和 \Colorbox{lightgrey}{\lstinline{gatts_profile_b_event_handler()}}。GATT客户端上的不同应用程序使用不同的接口，由 \Colorbox{lightgrey}{\lstinline{gatts_if}} 参数表示。对于初始化，此参数设置为 \Colorbox{lightgrey}{\lstinline{ESP_GATT_IF_NONE}}，意味着应用程序配置文件尚未链接到任何客户端。
 
 \begin{mycode}{为不同的应用注册回调函数}
-struct gatts_profile_inst heart_rate_profile_tab[PROFILE_NUM] = {
-    [PROFILE_APP_IDX] = {
-        .gatts_cb = gatts_profile_event_handler,
-        .gatts_if = ESP_GATT_IF_NONE, /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
+static struct gatts_profile_inst gl_profile_tab[PROFILE_NUM] = {
+    [PROFILE_A_APP_ID] = {
+        .gatts_cb = gatts_profile_a_event_handler,
+        .gatts_if = ESP_GATT_IF_NONE,
+    [PROFILE_B_APP_ID] = {
+        .gatts_cb = gatts_profile_b_event_handler,
+        .gatts_if = ESP_GATT_IF_NONE,
     },
 };
 \end{mycode}
@@ -2340,8 +2392,198 @@ struct gatts_profile_inst heart_rate_profile_tab[PROFILE_NUM] = {
 最后，使用应用程序ID注册应用程序配置文件，这是一个用户分配的数字，用于标识每个配置文件。通过这种方式，一个服务器可以运行多个应用程序配置文件。
 
 \begin{mycode}{使用应用ID注册配置文件}
-esp_ble_gatts_app_register(ESP_APP_ID);
+esp_ble_gatts_app_register(PROFILE_A_APP_ID);
+esp_ble_gatts_app_register(PROFILE_B_APP_ID);
 \end{mycode}
+
+\subsection{设置GAP参数}
+
+注册应用程序事件是程序生命周期中触发的第一个事件，此示例使用Profile A GATT事件句柄在注册时配置广告参数。此示例提供了使用标准蓝牙核心规范广告参数或自定义原始缓冲区的选项。可以通过\Colorbox{lightgrey}{\lstinline{CONFIG_SET_RAW_ADV_DATA}}定义来选择此选项。原始广告数据可用于实现iBeacon、Eddystone或其他专有和自定义帧类型，如用于室内定位服务的帧类型，这些帧类型与标准规范不同。
+
+用于配置标准蓝牙规范广告参数的函数是\Colorbox{lightgrey}{\lstinline{esp_ble_gap_config_adv_data()}}，它接受一个指向\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}结构的指针。广告数据的\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}数据结构定义如下：
+
+\begin{mycode}{esp\_ble\_adv\_data\_t}
+typedef struct {
+    bool set_scan_rsp;            /*!< Set this advertising data as scan response or not*/
+    bool include_name;            /*!< Advertising data include device name or not */
+    bool include_txpower;         /*!< Advertising data include TX power */
+    int min_interval;             /*!< Advertising data show slave preferred connection min interval */
+    int max_interval;             /*!< Advertising data show slave preferred connection max interval */
+    int appearance;               /*!< External appearance of device */
+    uint16_t manufacturer_len;    /*!< Manufacturer data length */
+    uint8_t *p_manufacturer_data; /*!< Manufacturer data point */
+    uint16_t service_data_len;    /*!< Service data length */
+    uint8_t *p_service_data;      /*!< Service data point */
+    uint16_t service_uuid_len;    /*!< Service uuid length */
+    uint8_t *p_service_uuid;      /*!< Service uuid array point */
+    uint8_t flag;                 /*!< Advertising flag of discovery mode, see BLE_ADV_DATA_FLAG detail */
+} esp_ble_adv_data_t;
+\end{mycode}
+
+在这个例子里面，初始化以上结构体如下：
+
+\begin{mycode}{结构体初始化}
+static esp_ble_adv_data_t adv_data = {
+    .set_scan_rsp = false,
+    .include_name = true,
+    .include_txpower = true,
+    .min_interval = 0x0006,
+    .max_interval = 0x0010,
+    .appearance = 0x00,
+    .manufacturer_len = 0, //TEST_MANUFACTURER_DATA_LEN,
+    .p_manufacturer_data =  NULL, //&test_manufacturer[0],
+    .service_data_len = 0,
+    .p_service_data = NULL,
+    .service_uuid_len = 32,
+    .p_service_uuid = test_service_uuid128,
+    .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
+};
+\end{mycode}
+
+最小和最大从设备首选连接间隔以1.25毫秒为单位设置。在此示例中，最小从设备首选连接间隔定义为\Colorbox{lightgrey}{\lstinline{0x0006 * 1.25毫秒 = 7.5毫秒}}，最大从设备首选连接间隔初始化为\Colorbox{lightgrey}{\lstinline{0x0010 * 1.25毫秒 = 20毫秒}}。
+
+广告负载最多可以包含31字节的数据。如果参数数据足够大以至于超过31字节的广告包限制，可能会导致栈切割广告包并且留下一些参数不包括在内。如果取消注释制造商长度和数据，这种行为可以在此示例中展示，这将导致重新编译和测试后服务不被广告。
+
+也可以使用\Colorbox{lightgrey}{\lstinline{esp_ble_gap_config_adv_data_raw()}}和\Colorbox{lightgrey}{\lstinline{esp_ble_gap_config_scan_rsp_data_raw()}}函数来广告自定义原始数据，这需要为广告数据和扫描响应数据创建并传递一个缓冲区。在此示例中，原始数据由\Colorbox{lightgrey}{\lstinline{raw_adv_data[]}}和\Colorbox{lightgrey}{\lstinline{raw_scan_rsp_data[]}}数组表示。
+
+最后，使用\Colorbox{lightgrey}{\lstinline{esp_ble_gap_set_device_name()}}函数来设置设备名称。注册事件处理程序如下所示：
+
+\begin{mycode}{gatts\_profile\_a\_event\_handler}
+static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
+    switch (event) {
+    case ESP_GATTS_REG_EVT:
+         ESP_LOGI(GATTS_TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.is_primary = true;
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.inst_id = 0x00;
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
+         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID_TEST_A;
+
+         esp_ble_gap_set_device_name(TEST_DEVICE_NAME);
+#ifdef CONFIG_SET_RAW_ADV_DATA
+        esp_err_t raw_adv_ret = esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
+        if (raw_adv_ret){
+            ESP_LOGE(GATTS_TAG, "config raw adv data failed, error code = %x ", raw_adv_ret);
+        }
+        adv_config_done |= adv_config_flag;
+        esp_err_t raw_scan_ret = esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
+        if (raw_scan_ret){
+            ESP_LOGE(GATTS_TAG, "config raw scan rsp data failed, error code = %x", raw_scan_ret);
+        }
+        adv_config_done |= scan_rsp_config_flag;
+#else
+        //config adv data
+        esp_err_t ret = esp_ble_gap_config_adv_data(&adv_data);
+        if (ret){
+            ESP_LOGE(GATTS_TAG, "config adv data failed, error code = %x", ret);
+        }
+        adv_config_done |= adv_config_flag;
+        //config scan response data
+        ret = esp_ble_gap_config_adv_data(&scan_rsp_data);
+        if (ret){
+            ESP_LOGE(GATTS_TAG, "config scan response data failed, error code = %x", ret);
+        }
+        adv_config_done |= scan_rsp_config_flag;
+#endif
+\end{mycode}
+
+\subsection{GAP事件句柄}
+
+一旦广告数据被设置，GAP事件\Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT}}就会被触发。对于原始广告数据集的情况，触发的事件是\Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT}}。另外，当原始扫描响应数据被设置时，\Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT}}事件将被触发。
+
+\begin{mycode}{gap\_event\_handler}
+static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
+{
+    switch (event) {
+#ifdef CONFIG_SET_RAW_ADV_DATA
+    case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
+         adv_config_done &= (~adv_config_flag);
+         if (adv_config_done==0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+    case ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT:
+         adv_config_done &= (~scan_rsp_config_flag);
+         if (adv_config_done==0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+#else
+    case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
+         adv_config_done &= (~adv_config_flag);
+         if (adv_config_done == 0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+    case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
+         adv_config_done &= (~scan_rsp_config_flag);
+         if (adv_config_done == 0){
+             esp_ble_gap_start_advertising(&adv_params);
+         }
+         break;
+#endif
+...
+\end{mycode}
+
+无论哪种情况，服务器都可以使用\Colorbox{lightgrey}{\lstinline{esp_ble_gap_start_advertising()}}函数开始广告，该函数需要一个类型为\Colorbox{lightgrey}{\lstinline{esp_ble_adv_params_t}}的结构体，其中包含了栈操作所需的广告参数：
+
+\begin{mycode}{esp\_ble\_adv\_params\_t}
+/// Advertising parameters
+typedef struct {
+    uint16_t adv_int_min;
+    /*!< Minimum advertising interval for undirected and low duty cycle directed advertising.
+                    Range: 0x0020 to 0x4000
+                    Default: N = 0x0800 (1.28 second)
+                    Time = N * 0.625 msec
+                    Time Range: 20 ms to 10.24 sec */
+    uint16_t adv_int_max;
+    /*!< Maximum advertising interval for undirected and low duty cycle directed advertising.
+                    Range: 0x0020 to 0x4000
+                    Default: N = 0x0800 (1.28 second)
+                    Time = N * 0.625 msec
+                    Time Range: 20 ms to 10.24 sec */
+    esp_ble_adv_type_t adv_type;            /*!< Advertising type */
+    esp_ble_addr_type_t own_addr_type;      /*!< Owner bluetooth device address type */
+    esp_bd_addr_t peer_addr;                /*!< Peer device bluetooth device address */
+    esp_ble_addr_type_t peer_addr_type;     /*!< Peer device bluetooth device address type */
+    esp_ble_adv_channel_t channel_map;      /*!< Advertising channel map */
+    esp_ble_adv_filter_t adv_filter_policy; /*!< Advertising filter policy */
+}
+esp_ble_adv_params_t;
+\end{mycode}
+
+请注意，\Colorbox{lightgrey}{\lstinline{esp_ble_gap_config_adv_data()}}配置将要广告给客户端的数据，并且需要一个\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}结构体，而\Colorbox{lightgrey}{\lstinline{esp_ble_gap_start_advertising()}}使服务器实际开始广告，并且需要一个\Colorbox{lightgrey}{\lstinline{esp_ble_adv_params_t}}结构体。广告数据是展示给客户端的信息，而广告参数是GAP执行所需的配置。
+
+对于这个示例，广告参数初始化如下：
+
+\begin{mycode}{广告参数}
+static esp_ble_adv_params_t test_adv_params = {
+    .adv_int_min        = 0x20,
+    .adv_int_max        = 0x40,
+    .adv_type           = ADV_TYPE_IND,
+    .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
+    //.peer_addr        =
+    //.peer_addr_type   =
+    .channel_map        = ADV_CHNL_ALL,
+    .adv_filter_policy  = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
+};
+\end{mycode}
+
+这些参数将广告间隔配置在40毫秒到80毫秒之间。广告类型是\Colorbox{lightgrey}{\lstinline{ADV_IND}}，这是一种通用的、不针对特定中央设备的可连接类型。地址类型是公开的，使用所有频道，并允许来自任何中央设备的扫描和连接请求。
+
+如果广告成功开始，将生成一个\Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_ADV_START_COMPLETE_EVT}}事件，在本示例中用于检查广告状态是否确实为正在广告。否则，将打印一条错误消息。
+
+\begin{mycode}{打印错误消息}
+...
+    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+    //advertising start complete event to indicate advertising start successfully or failed
+         if (param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
+             ESP_LOGE(GATTS_TAG, "Advertising start failed\n");
+         }
+         break;
+...
+\end{mycode}
+
+\subsection{GATT事件句柄}
 
 \subsection{gatts\_event\_handler函数}
 
