@@ -826,16 +826,16 @@ $$
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.5\textwidth]{figures/fourier_series_square/figure.pdf}
+\includegraphics[width=0.4\textwidth]{figures/fourier_series_square/figure.pdf}
 \caption{方波的叠加过程}
 \label{fig:fourier_series_square}
 \end{figure}
 
-\pagebreak
-
 那么，知道了一个周期信号的函数是 $s(t) = s(t + T)$，如何知道这个信号是由哪些正弦波叠加而成的呢？
 
 这就要引入大名鼎鼎的“傅里叶级数”了。
+
+\section{傅里叶级数}
 
 \begin{marker}
 傅里叶级数得名于法国数学家约瑟夫·傅里叶（1768年–1830年），他提出任何函数都可以展开为三角级数。此前数学家欧拉、达朗贝尔和克莱罗，已发现在认定一个函数有三角级数展开后，通过积分方法计算其系数的公式，而拉格朗日等人已经找到了一些非周期函数的三角级数展开。将周期函数分解为简单振荡函数的总和的最早想法，可以追溯至公元前3世纪古代天文学家的均轮和本轮学说。
@@ -856,6 +856,37 @@ A_0 &= \frac{1}{T}\int_{T}{s(t)dt} \\
 A_n &= \frac{2}{T}\int_{T}{s(t)\cos(\frac{2\pi nx}{T})dt} \\
 B_n &= \frac{2}{T}\int_{T}{s(t)\sin(\frac{2\pi nx}{T})dt}
 \end{align*}
+
+我们以方波信号为例子，方波信号的函数表达式如下：
+
+$$
+s(t) = \sum_{n=-\infty}^{\infty}s_{one}(t-nT)
+$$
+
+其中，
+
+$$
+s_{one}(x) = \begin{cases}
+    1, & 0 < x < \frac{T}{2} \\
+    -1, & \frac{T}{2} < x < T \\
+    0, & \text{其它情况}
+\end{cases}
+$$
+
+那么计算出来的傅里叶级数是：
+
+$$
+s(t) = \sum_{n=1,3,5,\dots}^{\infty}\frac{4}{n\pi}\sin(\frac{2\pi nt}{T})
+$$
+
+我们来可视化一下，如图 \ref{fig:square_wave_time_frequency} 所示。
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{figures/square_wave_time_frequency/figure.pdf}
+\caption{方波的时域和频域}
+\label{fig:square_wave_time_frequency}
+\end{figure}
 
 \section{时域和频域举例}
 
