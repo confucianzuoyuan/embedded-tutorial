@@ -670,7 +670,37 @@ uint8_t KEYBOARD_read_key(void)
 每个电容键盘的校正数值可能不一样。
 \end{marker}
 
-好的。有关键盘的 $I^2C$ 驱动和读取按键值的代码已经写好了。接下来我们实现处理按键中断的代码。
+好的。有关键盘的 $I^2C$ 驱动和读取按键值的代码已经写好了。
+
+然后我们编写GPIO初始化的代码。
+
+\begin{mycode}{atguigu-gpio-example/main/gpio\_main.c}
+/// GPIO初始化
+void KEYBOARD_init(void)
+{
+    gpio_config_t io_conf;
+    // disable interrupt
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    // set as output mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    // bit mask of the pins that you want to set,e.g.SDA
+    io_conf.pin_bit_mask = ((1ULL << SC12B_SCL) | (1ULL << SC12B_SDA));
+    // disable pull-down mode
+    io_conf.pull_down_en = 0;
+    // disable pull-up mode
+    io_conf.pull_up_en = 1;
+    // configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    // 中断
+    io_conf.intr_type = GPIO_INTR_POSEDGE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = (1ULL << SC12B_INT);
+    gpio_config(&io_conf);
+}
+\end{mycode}
+
+接下来我们实现处理按键中断的代码。
 
 首先初始化一个保存 GPIO 中断事件的队列。
 
@@ -736,7 +766,7 @@ static void ISR_QUEUE_Init(void)
 void app_main(void)
 {
     ISR_QUEUE_Init();
-    KEYBORAD_init();
+    KEYBOARD_init();
 }
 \end{mycode}
 
@@ -2585,41 +2615,38 @@ static esp_ble_adv_params_t test_adv_params = {
 
 \subsection{GATT事件句柄}
 
-\subsection{gatts\_event\_handler函数}
+当一个应用注册时，会触发\Colorbox{lightgrey}{\lstinline{ESP_GATTS_REG_EVT}}事件。\Colorbox{lightgrey}{\lstinline{ESP_GATTS_REG_EVT}}的参数如下所示：
+
+\begin{mycode}{参数}
+esp_gatt_status_t status;  /*!< Operation status */`
+uint16_t app_id;           /*!< Application id which input in register API */`
+\end{mycode}
+
+除了前面的参数之外，该事件还包含了由BLE栈分配的GATT接口。该事件被\Colorbox{lightgrey}{\lstinline{gatts_event_handler()}}捕获，该处理程序用于在配置文件表中存储生成的接口，然后将事件转发到相应的配置文件事件处理程序。
 
 \begin{mycode}{gatts\_event\_handler}
-void gatts_event_handler(
-    esp_gatts_cb_event_t event,
-    esp_gatt_if_t gatts_if,
-    esp_ble_gatts_cb_param_t *param)
+static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
 {
     /* If event is register event, store the gatts_if for each profile */
-    if (event == ESP_GATTS_REG_EVT)
-    {
-        if (param->reg.status == ESP_GATT_OK)
-        {
-            heart_rate_profile_tab[PROFILE_APP_IDX].gatts_if = gatts_if;
-        }
-        else
-        {
-            ESP_LOGE(GATTS_TABLE_TAG, "reg app failed, app_id %04x, status %d",
-                     param->reg.app_id,
-                     param->reg.status);
+    if (event == ESP_GATTS_REG_EVT) {
+        if (param->reg.status == ESP_GATT_OK) {
+            gl_profile_tab[param->reg.app_id].gatts_if = gatts_if;
+        } else {
+            ESP_LOGI(GATTS_TAG, "Reg app failed, app_id %04x, status %d\n",
+                    param->reg.app_id,
+                    param->reg.status);
             return;
         }
     }
-    do
-    {
+
+/* If the gatts_if equal to profile A, call profile A cb handler,
+ * so here call each profile's callback */
+    do {
         int idx;
-        for (idx = 0; idx < PROFILE_NUM; idx++)
-        {
-            /* ESP_GATT_IF_NONE, not specify a certain gatt_if, need to call every profile cb function */
-            if (gatts_if == ESP_GATT_IF_NONE
-               || gatts_if == heart_rate_profile_tab[idx].gatts_if)
-            {
-                if (heart_rate_profile_tab[idx].gatts_cb)
-                {
-                    (*@\Colorbox{red}{heart\_rate\_profile\_tab[idx].gatts\_cb(event, gatts\_if, param);}@*)
+        for (idx = 0; idx < PROFILE_NUM; idx++) {
+            if (gatts_if == ESP_GATT_IF_NONE||gatts_if == gl_profile_tab[idx].gatts_if) {
+                if (gl_profile_tab[idx].gatts_cb) {
+                    gl_profile_tab[idx].gatts_cb(event, gatts_if, param);
                 }
             }
         }
@@ -2627,153 +2654,232 @@ void gatts_event_handler(
 }
 \end{mycode}
 
-第 32 行是最关键的，就是执行回调函数。所以我们接下来实现这个回调函数。
+\subsection{创建服务}
 
-\subsection{gatts\_profile\_event\_handler函数}
+注册事件还用于使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_create_service()}}创建服务。当服务创建完成时，会调用回调事件\Colorbox{lightgrey}{\lstinline{ESP_GATTS_CREATE_EVT}}来向配置文件报告状态和服务ID。创建服务的方式是：
 
-\begin{mycode}{gatts\_profile\_event\_handler}
-void gatts_profile_event_handler(
-    esp_gatts_cb_event_t event,
-    esp_gatt_if_t gatts_if,
-    esp_ble_gatts_cb_param_t *param)
-{
-    switch (event)
-    {
+\begin{mycode}{esp\_ble\_gatts\_create\_service}
+...
+esp_ble_gatts_create_service(gatts_if, &gl_profile_tab[PROFILE_A_APP_ID].service_id, GATTS_NUM_HANDLE_TEST_A);
+break;
+...
+\end{mycode}
+
+句柄的数量定义为4：
+
+\begin{mycode}{句柄数量}
+#define GATTS_NUM_HANDLE_TEST_A 4
+\end{mycode}
+
+句柄包括：
+
+\begin{enumerate}
+\item 服务句柄
+\item 特征句柄
+\item 特征值句柄
+\item 特征描述符句柄
+\end{enumerate}
+
+服务被定义为一个具有16位UUID长度的主服务。服务ID使用实例ID = 0和由\Colorbox{lightgrey}{\lstinline{GATTS_SERVICE_UUID_TEST_A}}定义的UUID进行初始化。
+
+服务实例ID可以用来区分具有相同UUID的多个服务。在这个示例中，由于每个应用程序配置文件只有一个服务，并且服务具有不同的UUID，所以在配置文件A和B中服务实例ID都可以定义为0。然而，如果只有一个应用程序配置文件，且两个服务使用相同的UUID，则需要使用不同的实例ID来区分这两个服务。
+
+应用程序配置文件B以与配置文件A相同的方式创建服务：
+
+\begin{mycode}{创建服务}
+static void gatts_profile_b_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
+    switch (event) {
     case ESP_GATTS_REG_EVT:
-    {
-        esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
-        esp_ble_gap_config_adv_data_raw(raw_adv_data, sizeof(raw_adv_data));
-        adv_config_done |= ADV_CONFIG_FLAG;
-        esp_ble_gap_config_scan_rsp_data_raw(raw_scan_rsp_data, sizeof(raw_scan_rsp_data));
-        adv_config_done |= SCAN_RSP_CONFIG_FLAG;
-        esp_ble_gatts_create_attr_tab(
-            gatt_db,
-            gatts_if,
-            HRS_IDX_NB,
-            SVC_INST_ID
-        );
-    }
-    break;
-    case ESP_GATTS_READ_EVT:
-        break;
-    case ESP_GATTS_WRITE_EVT:
-        if (!param->write.is_prep)
-        {
-            esp_log_buffer_hex("接收到的数据：", param->write.value, param->write.len);
-            if (param->write.value[0] == 'a'
-               && param->write.value[1] == 't'
-               && param->write.value[2] == 'g'
-               && param->write.value[3] == 'u'
-               && param->write.value[4] == 'i'
-               && param->write.value[5] == 'g'
-               && param->write.value[6] == 'u')
-            {
-                printf("通过蓝牙开锁成功\r\n");
-                MOTOR_Open_lock();
-            }
-            if (heart_rate_handle_table[IDX_CHAR_CFG_A] == param->write.handle
-                && param->write.len == 2)
-            {
-                uint16_t descr_value = param->write.value[1] << 8 | param->write.value[0];
-                if (descr_value == 0x0001)
-                {
-                    uint8_t notify_data[] = "atguigu";
-                    // the size of notify_data[] need less than MTU size
-                    esp_ble_gatts_send_indicate(
-                        gatts_if,
-                        param->write.conn_id,
-                        heart_rate_handle_table[IDX_CHAR_VAL_A],
-                        sizeof(notify_data),
-                        notify_data,
-                        false);
-                }
-                else if (descr_value == 0x0002)
-                {
-                    // ...
-                }
-                else if (descr_value == 0x0000)
-                {
-                    // ...
-                }
-                else
-                {
-                    // ...
-                }
-            }
-            /* send response when param->write.need_rsp is true*/
-            if (param->write.need_rsp)
-            {
-                esp_ble_gatts_send_response(
-                    gatts_if,
-                    param->write.conn_id,
-                    param->write.trans_id,
-                    ESP_GATT_OK,
-                    NULL);
-            }
-        }
-        else
-        {
-            /* handle prepare write */
-            example_prepare_write_event_env(gatts_if, &prepare_write_env, param);
-        }
-        break;
-    case ESP_GATTS_EXEC_WRITE_EVT:
-        example_exec_write_event_env(&prepare_write_env, param);
-        break;
-    case ESP_GATTS_MTU_EVT:
-    case ESP_GATTS_CONF_EVT:
-    case ESP_GATTS_START_EVT:
-        break;
-    case ESP_GATTS_CONNECT_EVT:
-        ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_CONNECT_EVT, conn_id = %d", param->connect.conn_id);
-        esp_log_buffer_hex(GATTS_TABLE_TAG, param->connect.remote_bda, 6);
-        esp_ble_conn_update_params_t conn_params = {0};
-        memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
-        /* For the iOS system, please refer to Apple official documents about the BLE connection parameters restrictions. */
-        conn_params.latency = 0;
-        conn_params.max_int = 0x20; // max_int = 0x20*1.25ms = 40ms
-        conn_params.min_int = 0x10; // min_int = 0x10*1.25ms = 20ms
-        conn_params.timeout = 400;  // timeout = 400*10ms = 4000ms
-        // start sent the update connection parameters to the peer device.
-        esp_ble_gap_update_conn_params(&conn_params);
-        break;
-    case ESP_GATTS_DISCONNECT_EVT:
-        ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_DISCONNECT_EVT, reason = 0x%x", param->disconnect.reason);
-        esp_ble_gap_start_advertising(&adv_params);
-        break;
-    case ESP_GATTS_CREAT_ATTR_TAB_EVT:
-    {
-        if (param->add_attr_tab.status != ESP_GATT_OK)
-        {
-            ESP_LOGE(GATTS_TABLE_TAG, "create attribute table failed, error code=0x%x", param->add_attr_tab.status);
-        }
-        else if (param->add_attr_tab.num_handle != HRS_IDX_NB)
-        {
-            ESP_LOGE(GATTS_TABLE_TAG, "create attribute table abnormally, num_handle (%d) \
-                        doesn't equal to HRS_IDX_NB(%d)",
-                     param->add_attr_tab.num_handle, HRS_IDX_NB);
-        }
-        else
-        {
-            ESP_LOGI(GATTS_TABLE_TAG, "create attribute table successfully, the number handle = %d\n", param->add_attr_tab.num_handle);
-            memcpy(heart_rate_handle_table, param->add_attr_tab.handles, sizeof(heart_rate_handle_table));
-            esp_ble_gatts_start_service(heart_rate_handle_table[IDX_SVC]);
-        }
-        break;
-    }
-    case ESP_GATTS_STOP_EVT:
-    case ESP_GATTS_OPEN_EVT:
-    case ESP_GATTS_CANCEL_OPEN_EVT:
-    case ESP_GATTS_CLOSE_EVT:
-    case ESP_GATTS_LISTEN_EVT:
-    case ESP_GATTS_CONGEST_EVT:
-    case ESP_GATTS_UNREG_EVT:
-    case ESP_GATTS_DELETE_EVT:
-    default:
-        break;
-    }
+         ESP_LOGI(GATTS_TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.is_primary = true;
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.inst_id = 0x00;
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
+         gl_profile_tab[PROFILE_B_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID_TEST_B;
+
+         esp_ble_gatts_create_service(gatts_if, &gl_profile_tab[PROFILE_B_APP_ID].service_id, GATTS_NUM_HANDLE_TEST_B);
+         break;
+...
 }
 \end{mycode}
+
+\subsection{启动服务并创建特征}
+
+当服务成功创建时，由配置文件GATT处理程序管理的\Colorbox{lightgrey}{\lstinline{ESP_GATTS_CREATE_EVT}}事件将被触发，可以用来启动服务并向服务中添加特征。对于配置文件A的情况，服务的启动和特征的添加如下所示：
+
+\begin{mycode}{ESP\_GATTS\_CREATE\_EVT}
+case ESP_GATTS_CREATE_EVT:
+     ESP_LOGI(GATTS_TAG, "CREATE_SERVICE_EVT, status %d, service_handle %d\n", param->create.status, param->create.service_handle);
+     gl_profile_tab[PROFILE_A_APP_ID].service_handle = param->create.service_handle;
+     gl_profile_tab[PROFILE_A_APP_ID].char_uuid.len = ESP_UUID_LEN_16;
+     gl_profile_tab[PROFILE_A_APP_ID].char_uuid.uuid.uuid16 = GATTS_CHAR_UUID_TEST_A;  
+
+     esp_ble_gatts_start_service(gl_profile_tab[PROFILE_A_APP_ID].service_handle);
+     a_property = ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
+     esp_err_t add_char_ret =  
+     esp_ble_gatts_add_char(gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
+                            &gl_profile_tab[PROFILE_A_APP_ID].char_uuid,  
+                            ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
+                            a_property,  
+                            &gatts_demo_char1_val,  
+                            NULL);
+    if (add_char_ret){
+        ESP_LOGE(GATTS_TAG, "add char failed, error code =%x",add_char_ret);
+    }
+    break;
+\end{mycode}
+
+首先，由BLE协议栈生成的服务句柄存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特征的UUID及其UUID长度。特征UUID的长度再次为16位。使用先前生成的服务句柄，通过\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_start_service()}}函数启动服务。触发了\Colorbox{lightgrey}{\lstinline{ESP_GATTS_START_EVT}}事件，该事件用于打印信息。通过\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char()}}函数结合特征的权限和属性将特征添加到服务中。在这个示例中，两个配置文件中的特征如下设置：
+
+权限：
+
+\begin{itemize}
+\item \Colorbox{lightgrey}{\lstinline{ESP_GATT_PERM_READ}}：允许读取特征值
+\item \Colorbox{lightgrey}{\lstinline{ESP_GATT_PERM_WRITE}}：允许写入特征值
+\end{itemize}
+
+属性：
+
+\begin{itemize}
+\item \Colorbox{lightgrey}{\lstinline{ESP_GATT_CHAR_PROP_BIT_READ}}：可以读取特征
+\item \Colorbox{lightgrey}{\lstinline{ESP_GATT_CHAR_PROP_BIT_WRITE}}：可以写入特征
+\item \Colorbox{lightgrey}{\lstinline{ESP_GATT_CHAR_PROP_BIT_NOTIFY}}：特征可以通知值变化
+\end{itemize}
+
+对于读和写同时拥有权限和属性可能看起来有些冗余。然而，属性的读写属性是显示给客户端的信息，以便让客户端知道服务器是否接受读写请求。从这个意义上说，属性作为提示，以便客户端正确访问服务器资源。另一方面，权限是授权给客户端的，允许其读取或写入该属性。例如，如果客户端尝试写入一个没有写权限的属性，即使设置了写属性，服务器也会拒绝该请求。
+
+此外，此示例给特征赋予了一个初始值，由\Colorbox{lightgrey}{\lstinline{gatts_demo_char1_val}}表示。初始值定义如下：
+
+\begin{mycode}{gatts\_demo\_char1\_val}
+esp_attr_value_t gatts_demo_char1_val =
+{
+    .attr_max_len = GATTS_DEMO_CHAR_VAL_LEN_MAX,
+    .attr_len     = sizeof(char1_str),
+    .attr_value   = char1_str,
+};
+\end{mycode}
+
+Where \Colorbox{lightgrey}{\lstinline{char1_str}} is dummy data:
+
+\begin{mycode}{char1\_str}
+uint8_t char1_str[] = {0x11,0x22,0x33};
+\end{mycode}
+
+特征长度定义为如下：
+
+\begin{mycode}{特征长度}
+#define GATTS_DEMO_CHAR_VAL_LEN_MAX 0x40
+\end{mycode}
+
+特征的初始值必须是一个非空对象，并且特征的长度必须始终大于零，否则栈将返回错误。
+
+最后，特征被配置为每次读取或写入特征时都需要手动发送响应，而不是让栈自动响应。这是通过设置\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char()}}函数的最后一个参数，代表属性响应控制参数，为\Colorbox{lightgrey}{\lstinline{ESP_GATT_RSP_BY_APP}}或\Colorbox{lightgrey}{\lstinline{NULL}}来配置的。
+
+\subsection{创建特征描述符}
+
+向服务添加特征会触发一个\Colorbox{lightgrey}{\lstinline{ESP_GATTS_ADD_CHAR_EVT}}事件，该事件返回栈为刚添加的特征生成的句柄。事件包括以下参数：
+
+\begin{mycode}{参数}
+esp_gatt_status_t status;          /*!< Operation status */
+uint16_t attr_handle;	           /*!< Characteristic attribute handle */
+uint16_t service_handle;           /*!< Service attribute handle */
+esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
+\end{mycode}
+
+事件返回的属性句柄存储在配置文件表中，同时也设置了特征描述符的长度和UUID。使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_get_attr_value()}}函数读取特征的长度和值，然后出于信息目的打印它们。最后，使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char_descr()}}函数添加特征描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值以及自动响应设置。特征描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
+
+\begin{mycode}{ESP\_GATTS\_ADD\_CHAR\_EVT}
+    case ESP_GATTS_ADD_CHAR_EVT: {
+         uint16_t length = 0;
+         const uint8_t *prf_char;
+
+         ESP_LOGI(GATTS_TAG, "ADD_CHAR_EVT, status %d,  attr_handle %d, service_handle %d\n",
+                 param->add_char.status, param->add_char.attr_handle, param->add_char.service_handle);  
+                 gl_profile_tab[PROFILE_A_APP_ID].char_handle = param->add_char.attr_handle;
+                 gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.len = ESP_UUID_LEN_16;  
+                 gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.uuid.uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;  
+                 esp_err_t get_attr_ret = esp_ble_gatts_get_attr_value(param->add_char.attr_handle, &length, &prf_char);         
+         if (get_attr_ret == ESP_FAIL){  
+	           ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
+         }
+         ESP_LOGI(GATTS_TAG, "the gatts demo char length = %x\n", length);
+         for(int i = 0; i < length; i++){
+             ESP_LOGI(GATTS_TAG, "prf_char[%x] = %x\n",i,prf_char[i]);
+         }       
+         esp_err_t add_descr_ret = esp_ble_gatts_add_char_descr(  
+                                 gl_profile_tab[PROFILE_A_APP_ID].service_handle,  
+                                 &gl_profile_tab[PROFILE_A_APP_ID].descr_uuid,  
+                                 ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,  
+                                 NULL,NULL);
+         if (add_descr_ret){
+            ESP_LOGE(GATTS_TAG, "add char descr failed, error code = %x", add_descr_ret);
+         }
+         break;
+    }
+\end{mycode}
+
+一旦添加了描述符，就会触发\Colorbox{lightgrey}{\lstinline{ESP_GATTS_ADD_CHAR_DESCR_EVT}}事件，在本示例中用于打印一条信息消息。
+
+\begin{mycode}{ESP\_GATTS\_ADD\_CHAR\_DESCR\_EVT}
+    case ESP_GATTS_ADD_CHAR_DESCR_EVT:
+         ESP_LOGI(GATTS_TAG, "ADD_DESCR_EVT, status %d, attr_handle %d, service_handle %d\n",
+                  param->add_char.status, param->add_char.attr_handle,  
+                  param->add_char.service_handle);
+         break;
+\end{mycode}
+
+这个程序在配置文件B的事件处理程序中重复，以便为该配置文件创建服务和特征。
+
+\subsection{连接事件}
+
+当客户端连接到GATT服务器时，将触发\Colorbox{lightgrey}{\lstinline{ESP_GATTS_CONNECT_EVT}}事件。此事件用于更新连接参数，例如延迟、最小连接间隔、最大连接间隔和超时时间。连接参数被存储在一个\Colorbox{lightgrey}{\lstinline{esp_ble_conn_update_params_t}}结构体中，然后传递给\Colorbox{lightgrey}{\lstinline{esp_ble_gap_update_conn_params()}}函数。更新连接参数的程序只需要执行一次，因此配置文件B的连接事件处理程序不包括\Colorbox{lightgrey}{\lstinline{esp_ble_gap_update_conn_params()}}函数。最后，事件返回的连接ID被存储在配置文件表中。
+
+Profile A 连接事件：
+
+\begin{mycode}{ESP\_GATTS\_CONNECT\_EVT}
+case ESP_GATTS_CONNECT_EVT: {  
+     esp_ble_conn_update_params_t conn_params = {0};  
+     memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
+     /* For the IOS system, please reference the apple official documents about the ble connection parameters restrictions. */
+     conn_params.latency = 0;  
+     conn_params.max_int = 0x30;    // max_int = 0x30*1.25ms = 40ms  
+     conn_params.min_int = 0x10;    // min_int = 0x10*1.25ms = 20ms   
+     conn_params.timeout = 400;     // timeout = 400*10ms = 4000ms  
+     ESP_LOGI(GATTS_TAG, "ESP_GATTS_CONNECT_EVT, conn_id %d, remote %02x:%02x:%02x:%02x:%02x:%02x:, is_conn %d",  
+             param->connect.conn_id,  
+             param->connect.remote_bda[0],  
+             param->connect.remote_bda[1],  
+             param->connect.remote_bda[2],  
+             param->connect.remote_bda[3],  
+             param->connect.remote_bda[4],  
+             param->connect.remote_bda[5],  
+             param->connect.is_connected);
+ 	 gl_profile_tab[PROFILE_A_APP_ID].conn_id = param->connect.conn_id;
+	 //start sent the update connection parameters to the peer device.
+	 esp_ble_gap_update_conn_params(&conn_params);
+	 break;
+    }
+\end{mycode}
+
+Profile B连接事件：
+
+\begin{mycode}{ESP\_GATTS\_CONNECT\_EVT}
+case ESP_GATTS_CONNECT_EVT:  
+     ESP_LOGI(GATTS_TAG, "CONNECT_EVT, conn_id %d, remote %02x:%02x:%02x:%02x:%02x:%02x:, is_conn %d\n",  
+              param->connect.conn_id,  
+              param->connect.remote_bda[0],  
+              param->connect.remote_bda[1],  
+              param->connect.remote_bda[2],  
+              param->connect.remote_bda[3],  
+              param->connect.remote_bda[4],  
+              param->connect.remote_bda[5],  
+              param->connect.is_connected);
+	  gl_profile_tab[PROFILE_B_APP_ID].conn_id = param->connect.conn_id;
+	  break;
+\end{mycode}
+
+\subsection{总结}
+
+在本文档中，我们详细介绍了GATT服务器示例代码的每个部分。该应用程序是围绕应用程序配置文件的概念设计的。此外，还解释了此示例用于注册事件处理程序的程序。事件遵循一系列配置步骤，例如定义广告参数、更新连接参数以及创建服务和特征。最后，解释了如何处理读写事件，包括通过将写操作分割成可以适应属性协议消息的块来实现长特征的写入。
 
 \chapter{WIFI模块}
 
