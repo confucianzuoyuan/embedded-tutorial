@@ -315,6 +315,14 @@ Done
 
 \chapter{电容键盘模块}
 
+电容键盘使用 \Colorbox{lightgrey}{\lstinline{SC12B}} 。电路图如下：
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{keyboard.png}
+\caption{电容键盘电路图}
+\end{figure}
+
 先引入这个模块的原因是为了让大家熟悉如何操作 ESP32 的 GPIO 引脚。和 STM32 的 HAL 库的使用是类似的。
 
 在编写代码之前，让我们先来创建项目。
@@ -1801,7 +1809,7 @@ void MOTOR_Open_lock(void)
 
 ESP32使用串口和指纹模块进行通信。电路图如下：
 
-\begin{figure}[!htb]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.9\textwidth]{fingerprint.png}
 \caption{指纹模块电路图}
@@ -2875,6 +2883,322 @@ case ESP_GATTS_CONNECT_EVT:
               param->connect.is_connected);
 	  gl_profile_tab[PROFILE_B_APP_ID].conn_id = param->connect.conn_id;
 	  break;
+\end{mycode}
+
+\Colorbox{lightgrey}{\lstinline{esp_ble_gap_update_conn_params()}} 函数出发了一个 GAP 事件 \Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT}}，这个函数用来打印连接信息：
+
+\begin{mycode}{ESP\_GAP\_BLE\_UPDATE\_CONN\_PARAMS\_EVT}
+    case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
+         ESP_LOGI(GATTS_TAG, "update connection params status = %d, min_int = %d, max_int = %d,
+                  conn_int = %d,latency = %d, timeout = %d",
+                  param->update_conn_params.status,
+                  param->update_conn_params.min_int,
+                  param->update_conn_params.max_int,
+                  param->update_conn_params.conn_int,
+                  param->update_conn_params.latency,
+                  param->update_conn_params.timeout);
+         break;
+\end{mycode}
+
+\subsection{管理读事件}
+
+既然服务和特征都已经创建并启动了，那么程序需要读取和写入事件。读取操作被表示为 \Colorbox{lightgrey}{\lstinline{ESP_GATTS_READ_EVT}} 事件，这个事件有以下参数：
+
+\begin{mycode}{参数}
+uint16_t conn_id;          /*!< Connection id */
+uint32_t trans_id;         /*!< Transfer id */
+esp_bd_addr_t bda;         /*!< The bluetooth device address which been read */
+uint16_t handle;           /*!< The attribute handle */
+uint16_t offset;           /*!< Offset of the value, if the value is too long */
+bool is_long;              /*!< The value is too long or not */
+bool need_rsp;             /*!< The read operation need to do response */
+\end{mycode}
+
+在这个示例中，使用由事件给定的相同句柄，构造了一个包含虚拟数据的响应，并使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_send_response()}}函数将其发送回主机。除了响应外，GATT接口、连接ID和传输ID也作为参数包含在\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_send_response()}}函数中。如果在创建特征或描述符时，自动响应字节被设置为\Colorbox{lightgrey}{\lstinline{NULL}}，则需要此函数。
+
+\begin{mycode}{ESP\_GATTS\_READ\_EVT}
+case ESP_GATTS_READ_EVT: {
+     ESP_LOGI(GATTS_TAG, "GATT_READ_EVT, conn_id %d, trans_id %d, handle %d\n",  
+              param->read.conn_id, param->read.trans_id, param->read.handle);  
+              esp_gatt_rsp_t rsp;  
+              memset(&rsp, 0, sizeof(esp_gatt_rsp_t));  
+              rsp.attr_value.handle = param->read.handle;  
+              rsp.attr_value.len = 4;  
+              rsp.attr_value.value[0] = 0xde;  
+              rsp.attr_value.value[1] = 0xed;  
+              rsp.attr_value.value[2] = 0xbe;  
+              rsp.attr_value.value[3] = 0xef;  
+              esp_ble_gatts_send_response(gatts_if,  
+                                          param->read.conn_id,  
+                                          param->read.trans_id,  
+                                          ESP_GATT_OK, &rsp);
+     break;
+    }
+\end{mycode}
+
+\subsection{管理写事件}
+
+写事件被表示为 \Colorbox{lightgrey}{\lstinline{ESP_GATTS_WRITE_EVT}} 事件，这个事件有以下参数：
+
+\begin{mycode}{参数}
+uint16_t conn_id;         /*!< Connection id */
+uint32_t trans_id;        /*!< Transfer id */
+esp_bd_addr_t bda;        /*!< The bluetooth device address which been written */
+uint16_t handle;          /*!< The attribute handle */
+uint16_t offset;          /*!< Offset of the value, if the value is too long */
+bool need_rsp;            /*!< The write operation need to do response */
+bool is_prep;             /*!< This write operation is prepare write */
+uint16_t len;             /*!< The write attribute value length */
+uint8_t *value;           /*!< The write attribute value */
+\end{mycode}
+
+在这个示例中实现了两种类型的写入事件，写入特征值和写入长特征值。当特征值可以适应于一个属性协议最大传输单元（ATT MTU），通常为23字节时，使用第一种类型的写入。当要写入的属性长度超过一条ATT消息所能发送的长度时，使用第二种类型，通过使用准备写响应将数据分割成多个块，之后使用执行写请求来确认或取消完整的写请求。下图展示了写入长特征消息流程。
+
+当写入事件被触发时，此示例会打印日志消息，然后执行\Colorbox{lightgrey}{\lstinline{example_write_event_env()}}函数。
+
+\begin{mycode}{ESP\_GATTS\_WRITE\_EVT}
+case ESP_GATTS_WRITE_EVT: {                          
+     ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, conn_id %d, trans_id %d, handle %d\n", param->write.conn_id, param->write.trans_id, param->write.handle);
+     if (!param->write.is_prep){
+        ESP_LOGI(GATTS_TAG, "GATT_WRITE_EVT, value len %d, value :", param->write.len);
+        esp_log_buffer_hex(GATTS_TAG, param->write.value, param->write.len);
+        if (gl_profile_tab[PROFILE_B_APP_ID].descr_handle == param->write.handle && param->write.len == 2){
+            uint16_t descr_value= param->write.value[1]<<8 | param->write.value[0];
+            if (descr_value == 0x0001){
+                if (b_property & ESP_GATT_CHAR_PROP_BIT_NOTIFY){
+                    ESP_LOGI(GATTS_TAG, "notify enable");
+                    uint8_t notify_data[15];
+                    for (int i = 0; i < sizeof(notify_data); ++i)
+                    {
+                         notify_data[i] = i%0xff;  
+                     }
+                     //the size of notify_data[] need less than MTU size
+                     esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,  
+                                                 gl_profile_tab[PROFILE_B_APP_ID].char_handle,  
+                                                 sizeof(notify_data),  
+                                                 notify_data, false);
+                }
+            }else if (descr_value == 0x0002){
+                 if (b_property & ESP_GATT_CHAR_PROP_BIT_INDICATE){
+                     ESP_LOGI(GATTS_TAG, "indicate enable");
+                     uint8_t indicate_data[15];
+                     for (int i = 0; i < sizeof(indicate_data); ++i)
+                     {
+                         indicate_data[i] = i % 0xff;
+                      }
+                      //the size of indicate_data[] need less than MTU size
+                     esp_ble_gatts_send_indicate(gatts_if, param->write.conn_id,  
+                                                 gl_profile_tab[PROFILE_B_APP_ID].char_handle,  
+                                                 sizeof(indicate_data),  
+                                                 indicate_data, true);
+                }
+             }
+             else if (descr_value == 0x0000){
+                 ESP_LOGI(GATTS_TAG, "notify/indicate disable ");
+             }else{
+                 ESP_LOGE(GATTS_TAG, "unknown value");
+             }
+        }
+    }
+    example_write_event_env(gatts_if, &a_prepare_write_env, param);
+    break;
+}
+\end{mycode}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{GATT_Server_Figure_2.png}
+\caption{写长特征的消息流}
+\end{figure}
+
+\Colorbox{lightgrey}{\lstinline{example_write_event_env()}}函数包含了写长特征过程的逻辑：
+
+\begin{mycode}{example\_write\_event\_env}
+void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
+    esp_gatt_status_t status = ESP_GATT_OK;
+    if (param->write.need_rsp){
+       if (param->write.is_prep){
+            if (prepare_write_env->prepare_buf == NULL){
+                prepare_write_env->prepare_buf = (uint8_t *)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));
+                prepare_write_env->prepare_len = 0;
+                if (prepare_write_env->prepare_buf == NULL) {
+                    ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
+                    status = ESP_GATT_NO_RESOURCES;
+                }
+            } else {
+                if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
+                    status = ESP_GATT_INVALID_OFFSET;
+                }
+                else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
+                    status = ESP_GATT_INVALID_ATTR_LEN;
+                }
+            }
+
+            esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
+            gatt_rsp->attr_value.len = param->write.len;
+            gatt_rsp->attr_value.handle = param->write.handle;
+            gatt_rsp->attr_value.offset = param->write.offset;
+            gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+            memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
+            esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
+                                                                 param->write.trans_id, status, gatt_rsp);
+            if (response_err != ESP_OK){
+               ESP_LOGE(GATTS_TAG, "Send response error\n");
+            }
+            free(gatt_rsp);
+            if (status != ESP_GATT_OK){
+                return;
+            }
+            memcpy(prepare_write_env->prepare_buf + param->write.offset,
+                   param->write.value,
+                   param->write.len);
+            prepare_write_env->prepare_len += param->write.len;
+
+        }else{
+            esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
+        }
+    }
+}
+\end{mycode}
+
+当客户端发送写请求或准备写请求时，服务器应当响应。然而，如果客户端发送一个无需响应的写命令，服务器不需要回复响应。通过检查\Colorbox{lightgrey}{\lstinline{write.need_rsp}}参数的值来在写入过程中进行检查。如果需要响应，则继续执行响应准备；如果不存在，则客户端不需要响应，因此过程结束。
+
+\begin{mycode}{example\_write\_event\_env}
+void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env,  
+                             esp_ble_gatts_cb_param_t *param){
+    esp_gatt_status_t status = ESP_GATT_OK;
+    if (param->write.need_rsp){
+...
+\end{mycode}
+
+然后，函数检查代表\Colorbox{lightgrey}{\lstinline{write.is_prep}}的准备写请求参数是否被设置，这意味着客户端正在请求一个长特征写入。如果存在，程序将继续准备多个写响应；如果不存在，则服务器简单地发送回一个单一的写响应。
+
+\begin{mycode}{写响应}
+...
+if (param->write.is_prep) {
+...
+} else {
+    esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
+}
+...
+\end{mycode}
+
+为了处理长特征写事件，必须定义和初始化一个预备缓冲区：
+
+\begin{mycode}{prepare\_type\_evn\_t}
+typedef struct {
+    uint8_t                 *prepare_buf;
+    int                      prepare_len;
+} prepare_type_env_t;
+
+static prepare_type_env_t a_prepare_write_env;
+static prepare_type_env_t b_prepare_write_env;
+\end{mycode}
+
+为了使用预备缓冲区，需要分配一些内存。为了预防因为内存不够而造成的内存分配失败，需要打印错误：
+
+\begin{mycode}{分配内存}
+if (prepare_write_env->prepare_buf == NULL) {
+    prepare_write_env->prepare_buf =  
+    (uint8_t*)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));  
+    prepare_write_env->prepare_len = 0;
+    if (prepare_write_env->prepare_buf == NULL) {  
+       ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
+       status = ESP_GATT_NO_RESOURCES;
+    }
+}
+\end{mycode}
+
+如果缓冲区不是\Colorbox{lightgrey}{\lstinline{NULL}}，这意味着初始化完成了。下面的代码检查了偏移量以及写入内容的消息长度是否能装进缓冲区。
+
+\begin{mycode}{检查消息是否能装进缓冲区}
+else {
+	if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
+		status = ESP_GATT_INVALID_OFFSET;
+	}
+	else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
+		 status = ESP_GATT_INVALID_ATTR_LEN;
+	}
+}
+\end{mycode}
+
+现在，程序准备了要发送回客户端的\Colorbox{lightgrey}{\lstinline{esp_gatt_rsp_t}}类型的响应。响应是使用写请求的相同参数构造的，例如长度、句柄和偏移量。此外，设置了写入此特征所需的GATT认证类型为\Colorbox{lightgrey}{\lstinline{ESP_GATT_AUTH_REQ_NONE}}，这意味着客户端可以在不需要先进行认证的情况下写入此特征。一旦响应被发送，为其使用分配的内存将被释放。
+
+\begin{mycode}{发送响应}
+esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
+gatt_rsp->attr_value.len = param->write.len;
+gatt_rsp->attr_value.handle = param->write.handle;
+gatt_rsp->attr_value.offset = param->write.offset;
+gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
+esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
+                                                     param->write.trans_id, status, gatt_rsp);
+if (response_err != ESP_OK){
+	ESP_LOGE(GATTS_TAG, "Send response error\n");
+}
+free(gatt_rsp);
+if (status != ESP_GATT_OK){
+	return;
+}
+\end{mycode}
+
+最终，输入数据被拷贝到创建的缓冲区中，缓冲区的长度需要加上偏移量：
+
+\begin{mycode}{拷贝输入数据}
+memcpy(prepare_write_env->prepare_buf + param->write.offset,
+       param->write.value,  
+       param->write.len);
+prepare_write_env->prepare_len += param->write.len;
+\end{mycode}
+
+客户端通过发送执行写请求来完成长写序列。这个命令触发一个\Colorbox{lightgrey}{\lstinline{ESP_GATTS_EXEC_WRITE_EVT}}事件。服务器通过发送响应并执行\Colorbox{lightgrey}{\lstinline{example_exec_write_event_env()}}函数来处理这个事件：
+
+\begin{mycode}{ESP\_GATTS\_EXEC\_WRITE\_EVT}
+case ESP_GATTS_EXEC_WRITE_EVT:  
+     ESP_LOGI(GATTS_TAG,"ESP_GATTS_EXEC_WRITE_EVT");  
+     esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, NULL);  
+     example_exec_write_event_env(&a_prepare_write_env, param);  
+     break;
+\end{mycode}
+
+我们来看一下执行写函数：
+
+\begin{mycode}{执行写函数}
+void example_exec_write_event_env(prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
+    if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC){
+        esp_log_buffer_hex(GATTS_TAG, prepare_write_env->prepare_buf, prepare_write_env->prepare_len);
+    }
+    else{
+        ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
+    }
+    if (prepare_write_env->prepare_buf) {
+        free(prepare_write_env->prepare_buf);
+        prepare_write_env->prepare_buf = NULL;
+    }
+####     prepare_write_env->prepare_len = 0;
+}
+\end{mycode}
+
+执行写操作用于通过长特征写入程序来确认或取消之前完成的写入过程。为了做到这一点，函数检查与事件一起接收的参数中的\Colorbox{lightgrey}{\lstinline{exec_write_flag}}。如果标志等于由\Colorbox{lightgrey}{\lstinline{exec_write_flag}}表示的执行标志，则写入被确认，并且缓冲区的内容将被打印在日志中；如果不是，则意味着写入被取消，所有已写入的数据将被删除。
+
+\begin{mycode}{打印一些日志}
+if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC) {  
+   esp_log_buffer_hex(GATTS_TAG,  
+                      prepare_write_env->prepare_buf,  
+                      prepare_write_env->prepare_len);
+} else {
+    ESP_LOGI(GATTS_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
+}
+\end{mycode}
+
+最后，为了存储来自长写操作的数据块而创建的缓冲区结构被释放，其指针被设置为NULL，以便为下一个长写操作做好准备。
+
+\begin{mycode}{释放缓冲区}
+if (prepare_write_env->prepare_buf) {
+    free(prepare_write_env->prepare_buf);
+    prepare_write_env->prepare_buf = NULL;
+}
+prepare_write_env->prepare_len = 0;
 \end{mycode}
 
 \subsection{总结}
