@@ -315,6 +315,10 @@ Done
 
 \chapter{电容键盘模块}
 
+\begin{marker}
+电容键盘模块的参考代码位于\Colorbox{lightgrey}{\lstinline{examples\peripherals\gpio\generic_gpio}}文件夹。
+\end{marker}
+
 电容键盘使用 \Colorbox{lightgrey}{\lstinline{SC12B}} 。电路图如下：
 
 \begin{figure}[!htb]
@@ -1177,6 +1181,10 @@ ASK，Amplitude Shift Keying。幅移键控。如果用2个电平调制信号，
 
 \chapter{红外遥控（RMT）}
 
+\begin{marker}
+LED模块的参考代码位于\Colorbox{lightgrey}{\lstinline{examples/peripherals/rmt/led\_strip}}文件夹。
+\end{marker}
+
 \section{简介}
 
 红外遥控（RMT）外设是一个红外发射和接收控制器。其数据格式灵活，可进一步扩展为多功能的通用收发器，发送或接收多种类型的信号。就网络分层而言，RMT 硬件包含物理层和数据链路层。物理层定义通信介质和比特信号的表示方式，数据链路层定义 RMT 帧的格式。RMT 帧的最小数据单元称为 RMT 符号，在驱动程序中以 \Colorbox{lightgrey}{\lstinline{rmt_symbol_word_t}} 表示。
@@ -1819,7 +1827,7 @@ ESP32使用串口和指纹模块进行通信。电路图如下：
 
 我们先来写一个简单的串口示例程序。
 
-\begin{mycode}{控制电机转动来开关锁}
+\begin{mycode}{串口收发程序}
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
