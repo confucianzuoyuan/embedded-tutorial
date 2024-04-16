@@ -1838,8 +1838,8 @@ ESP32使用串口和指纹模块进行通信。电路图如下：
 
 static const int RX_BUF_SIZE = 1024;
 
-#define TXD_PIN (GPIO_NUM_20)
-#define RXD_PIN (GPIO_NUM_21)
+#define TXD_PIN (GPIO_NUM_21)
+#define RXD_PIN (GPIO_NUM_20)
 
 void init(void)
 {
@@ -1916,8 +1916,8 @@ void app_main(void)
 #include "driver/gpio.h"
 
 /// 下面的配置可以直接写死，也可以在 menuconfig 里面配置
-#define TXD_PIN (GPIO_NUM_20)
-#define RXD_PIN (GPIO_NUM_21)
+#define TXD_PIN (GPIO_NUM_21)
+#define RXD_PIN (GPIO_NUM_20)
 
 #define BUF_SIZE (1024)
 
