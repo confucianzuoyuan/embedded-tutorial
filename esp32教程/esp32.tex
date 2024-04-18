@@ -1182,7 +1182,7 @@ ASK，Amplitude Shift Keying。幅移键控。如果用2个电平调制信号，
 \chapter{红外遥控（RMT）}
 
 \begin{marker}
-LED模块的参考代码位于\Colorbox{lightgrey}{\lstinline{examples/peripherals/rmt/led\_strip}}文件夹。
+LED模块的参考代码位于\Colorbox{lightgrey}{\lstinline{examples/peripherals/rmt/led_strip}}文件夹。
 \end{marker}
 
 \section{简介}
@@ -2167,6 +2167,10 @@ void read_sys_params(void)
 
 \chapter{蓝牙模块}
 
+\begin{marker}
+蓝牙模块的参考代码位于\Colorbox{lightgrey}{\lstinline{examples/bluetooth/bluedroid/ble/gatt_server}}文件夹。
+\end{marker}
+
 实现了蓝牙功能和我们后面的 WIFI 功能，其实就可以自己编写代码作为固件烧录到 ESP32C3 里面了。这样也可以作为 STM32 的外设来使用了。这是 ESP32 所具有的独特的功能。
 
 蓝牙技术是一种无线通讯技术，广泛用于短距离内的数据交换。在蓝牙技术中，"Bluedroid"和"BLE"（Bluetooth Low Energy）是两个重要的概念，它们分别代表了蓝牙技术的不同方面。
@@ -2444,9 +2448,19 @@ esp_ble_gatts_app_register(PROFILE_B_APP_ID);
 
 \subsection{设置GAP参数}
 
-注册应用程序事件是程序生命周期中触发的第一个事件，此示例使用Profile A GATT事件句柄在注册时配置广告参数。此示例提供了使用标准蓝牙核心规范广告参数或自定义原始缓冲区的选项。可以通过\Colorbox{lightgrey}{\lstinline{CONFIG_SET_RAW_ADV_DATA}}定义来选择此选项。原始广告数据可用于实现iBeacon、Eddystone或其他专有和自定义帧类型，如用于室内定位服务的帧类型，这些帧类型与标准规范不同。
+注册应用程序事件是程序生命周期中触发的第一个事件，此示例使用Profile A GATT事件句柄在注册时配置广告参数。
 
-用于配置标准蓝牙规范广告参数的函数是\Colorbox{lightgrey}{\lstinline{esp_ble_gap_config_adv_data()}}，它接受一个指向\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}结构的指针。广告数据的\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}数据结构定义如下：
+此示例提供了使用标准蓝牙核心规范广告参数或自定义原始缓冲区的选项。
+
+可以通过\Colorbox{lightgrey}{\lstinline{CONFIG_SET_RAW_ADV_DATA}}定义来选择此选项。
+
+原始广告数据可用于实现iBeacon、Eddystone或其他专有和自定义帧类型，如用于室内定位服务的帧类型，这些帧类型与标准规范不同。
+
+用于配置标准蓝牙规范广告参数的函数是\Colorbox{lightgrey}{\lstinline{esp_ble_gap_config_adv_data()}}。
+
+它接受一个指向\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}结构的指针。
+
+广告数据的\Colorbox{lightgrey}{\lstinline{esp_ble_adv_data_t}}数据结构定义如下：
 
 \begin{mycode}{esp\_ble\_adv\_data\_t}
 typedef struct {
@@ -2486,7 +2500,9 @@ static esp_ble_adv_data_t adv_data = {
 };
 \end{mycode}
 
-最小和最大从设备首选连接间隔以1.25毫秒为单位设置。在此示例中，最小从设备首选连接间隔定义为\Colorbox{lightgrey}{\lstinline{0x0006 * 1.25毫秒 = 7.5毫秒}}，最大从设备首选连接间隔初始化为\Colorbox{lightgrey}{\lstinline{0x0010 * 1.25毫秒 = 20毫秒}}。
+最小和最大从设备首选连接间隔以1.25毫秒为单位设置。
+
+在此示例中，最小从设备首选连接间隔定义为\Colorbox{lightgrey}{\lstinline{0x0006 * 1.25毫秒 = 7.5毫秒}}，最大从设备首选连接间隔初始化为\Colorbox{lightgrey}{\lstinline{0x0010 * 1.25毫秒 = 20毫秒}}。
 
 广告负载最多可以包含31字节的数据。如果参数数据足够大以至于超过31字节的广告包限制，可能会导致栈切割广告包并且留下一些参数不包括在内。如果取消注释制造商长度和数据，这种行为可以在此示例中展示，这将导致重新编译和测试后服务不被广告。
 
@@ -2696,7 +2712,9 @@ break;
 \item 特征描述符句柄
 \end{enumerate}
 
-服务被定义为一个具有16位UUID长度的主服务。服务ID使用实例ID = 0和由\Colorbox{lightgrey}{\lstinline{GATTS_SERVICE_UUID_TEST_A}}定义的UUID进行初始化。
+服务被定义为一个具有16位UUID长度的主服务。
+
+服务ID使用实例ID = 0和由\Colorbox{lightgrey}{\lstinline{GATTS_SERVICE_UUID_TEST_A}}定义的UUID进行初始化。
 
 服务实例ID可以用来区分具有相同UUID的多个服务。在这个示例中，由于每个应用程序配置文件只有一个服务，并且服务具有不同的UUID，所以在配置文件A和B中服务实例ID都可以定义为0。然而，如果只有一个应用程序配置文件，且两个服务使用相同的UUID，则需要使用不同的实例ID来区分这两个服务。
 
@@ -2744,7 +2762,9 @@ case ESP_GATTS_CREATE_EVT:
     break;
 \end{mycode}
 
-首先，由BLE协议栈生成的服务句柄存储在配置文件表中，稍后应用层将使用它来引用此服务。然后，设置特征的UUID及其UUID长度。特征UUID的长度再次为16位。使用先前生成的服务句柄，通过\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_start_service()}}函数启动服务。触发了\Colorbox{lightgrey}{\lstinline{ESP_GATTS_START_EVT}}事件，该事件用于打印信息。通过\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char()}}函数结合特征的权限和属性将特征添加到服务中。在这个示例中，两个配置文件中的特征如下设置：
+首先，由BLE协议栈生成的服务句柄存储在配置文件表中，稍后应用层将使用它来引用此服务。
+
+然后，设置特征的UUID及其UUID长度。特征UUID的长度再次为16位。使用先前生成的服务句柄，通过\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_start_service()}}函数启动服务。触发了\Colorbox{lightgrey}{\lstinline{ESP_GATTS_START_EVT}}事件，该事件用于打印信息。通过\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char()}}函数结合特征的权限和属性将特征添加到服务中。在这个示例中，两个配置文件中的特征如下设置：
 
 权限：
 
@@ -2796,12 +2816,14 @@ uint8_t char1_str[] = {0x11,0x22,0x33};
 
 \begin{mycode}{参数}
 esp_gatt_status_t status;          /*!< Operation status */
-uint16_t attr_handle;	           /*!< Characteristic attribute handle */
+uint16_t attr_handle;              /*!< Characteristic attribute handle */
 uint16_t service_handle;           /*!< Service attribute handle */
 esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
 \end{mycode}
 
-事件返回的属性句柄存储在配置文件表中，同时也设置了特征描述符的长度和UUID。使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_get_attr_value()}}函数读取特征的长度和值，然后出于信息目的打印它们。最后，使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char_descr()}}函数添加特征描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值以及自动响应设置。特征描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
+事件返回的属性句柄存储在配置文件表中，同时也设置了特征描述符的长度和UUID。
+
+使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_get_attr_value()}}函数读取特征的长度和值，然后出于信息目的打印它们。最后，使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_add_char_descr()}}函数添加特征描述符。使用的参数包括服务句柄、描述符UUID、写和读权限、一个初始值以及自动响应设置。特征描述符的初始值可以是一个NULL指针，自动响应参数也设置为NULL，这意味着需要响应的请求必须手动回复。
 
 \begin{mycode}{ESP\_GATTS\_ADD\_CHAR\_EVT}
     case ESP_GATTS_ADD_CHAR_EVT: {
@@ -2815,7 +2837,7 @@ esp_bt_uuid_t char_uuid;           /*!< Characteristic uuid */
                  gl_profile_tab[PROFILE_A_APP_ID].descr_uuid.uuid.uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;  
                  esp_err_t get_attr_ret = esp_ble_gatts_get_attr_value(param->add_char.attr_handle, &length, &prf_char);         
          if (get_attr_ret == ESP_FAIL){  
-	           ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
+            ESP_LOGE(GATTS_TAG, "ILLEGAL HANDLE");
          }
          ESP_LOGI(GATTS_TAG, "the gatts demo char length = %x\n", length);
          for(int i = 0; i < length; i++){
@@ -2869,10 +2891,10 @@ case ESP_GATTS_CONNECT_EVT: {
              param->connect.remote_bda[4],  
              param->connect.remote_bda[5],  
              param->connect.is_connected);
- 	 gl_profile_tab[PROFILE_A_APP_ID].conn_id = param->connect.conn_id;
-	 //start sent the update connection parameters to the peer device.
-	 esp_ble_gap_update_conn_params(&conn_params);
-	 break;
+     gl_profile_tab[PROFILE_A_APP_ID].conn_id = param->connect.conn_id;
+     //start sent the update connection parameters to the peer device.
+     esp_ble_gap_update_conn_params(&conn_params);
+     break;
     }
 \end{mycode}
 
@@ -2889,11 +2911,11 @@ case ESP_GATTS_CONNECT_EVT:
               param->connect.remote_bda[4],  
               param->connect.remote_bda[5],  
               param->connect.is_connected);
-	  gl_profile_tab[PROFILE_B_APP_ID].conn_id = param->connect.conn_id;
-	  break;
+      gl_profile_tab[PROFILE_B_APP_ID].conn_id = param->connect.conn_id;
+      break;
 \end{mycode}
 
-\Colorbox{lightgrey}{\lstinline{esp_ble_gap_update_conn_params()}} 函数出发了一个 GAP 事件 \Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT}}，这个函数用来打印连接信息：
+\Colorbox{lightgrey}{\lstinline{esp_ble_gap_update_conn_params()}} 函数触发了一个 GAP 事件 \Colorbox{lightgrey}{\lstinline{ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT}}，这个函数用来打印连接信息：
 
 \begin{mycode}{ESP\_GAP\_BLE\_UPDATE\_CONN\_PARAMS\_EVT}
     case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
@@ -2910,7 +2932,9 @@ case ESP_GATTS_CONNECT_EVT:
 
 \subsection{管理读事件}
 
-既然服务和特征都已经创建并启动了，那么程序需要读取和写入事件。读取操作被表示为 \Colorbox{lightgrey}{\lstinline{ESP_GATTS_READ_EVT}} 事件，这个事件有以下参数：
+既然服务和特征都已经创建并启动了，那么程序需要读取和写入事件。
+
+读取操作被表示为 \Colorbox{lightgrey}{\lstinline{ESP_GATTS_READ_EVT}} 事件，这个事件有以下参数：
 
 \begin{mycode}{参数}
 uint16_t conn_id;          /*!< Connection id */
@@ -2922,7 +2946,13 @@ bool is_long;              /*!< The value is too long or not */
 bool need_rsp;             /*!< The read operation need to do response */
 \end{mycode}
 
-在这个示例中，使用由事件给定的相同句柄，构造了一个包含虚拟数据的响应，并使用\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_send_response()}}函数将其发送回主机。除了响应外，GATT接口、连接ID和传输ID也作为参数包含在\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_send_response()}}函数中。如果在创建特征或描述符时，自动响应字节被设置为\Colorbox{lightgrey}{\lstinline{NULL}}，则需要此函数。
+在这个示例中，使用由事件给定的相同句柄，构造了一个包含虚拟数据的响应，并使用
+
+\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_send_response()}}
+
+函数将其发送回主机。
+
+除了响应外，GATT接口、连接ID和传输ID也作为参数包含在\Colorbox{lightgrey}{\lstinline{esp_ble_gatts_send_response()}}函数中。如果在创建特征或描述符时，自动响应字节被设置为\Colorbox{lightgrey}{\lstinline{NULL}}，则需要此函数。
 
 \begin{mycode}{ESP\_GATTS\_READ\_EVT}
 case ESP_GATTS_READ_EVT: {
@@ -3121,12 +3151,12 @@ if (prepare_write_env->prepare_buf == NULL) {
 
 \begin{mycode}{检查消息是否能装进缓冲区}
 else {
-	if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
-		status = ESP_GATT_INVALID_OFFSET;
-	}
-	else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
-		 status = ESP_GATT_INVALID_ATTR_LEN;
-	}
+    if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
+        status = ESP_GATT_INVALID_OFFSET;
+    }
+    else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
+         status = ESP_GATT_INVALID_ATTR_LEN;
+    }
 }
 \end{mycode}
 
@@ -3142,11 +3172,11 @@ memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
 esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
                                                      param->write.trans_id, status, gatt_rsp);
 if (response_err != ESP_OK){
-	ESP_LOGE(GATTS_TAG, "Send response error\n");
+    ESP_LOGE(GATTS_TAG, "Send response error\n");
 }
 free(gatt_rsp);
 if (status != ESP_GATT_OK){
-	return;
+    return;
 }
 \end{mycode}
 
@@ -3544,13 +3574,17 @@ CLEAN_UP:
 
 \chapter{OTA功能}
 
+\begin{marker}
+OTA模块的参考代码位于\Colorbox{lightgrey}{\lstinline{examples/system/ota/simple_ota_example}}文件夹。
+\end{marker}
+
 我们可以在线更新ESP32的固件，也就是说通过WIFI下载新的固件然后替换掉旧的固件，实现在线升级功能。
 
 这部分代码也比较简单。首先我们要修改以下 Flash 的分区信息表。
 
 分区信息表如下：
 
-\begin{mycode}{partitions.csv}
+\begin{mycode}{partitions\_ota.csv}
 # Name,   Type, SubType, Offset,  Size, Flags
 # Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
 
@@ -3559,6 +3593,12 @@ otadata,  data, ota,     ,        0x2000,
 phy_init, data, phy,     ,        0x1000,
 ota_0,    app,  ota_0,   ,        1800K,
 ota_1,    app,  ota_1,   ,        1800K,
+\end{mycode}
+
+然后执行进入菜单命令，将Flash大小修改为4MB。
+
+\begin{mycode}{修改Flash大小}
+idf.py menuconfig
 \end{mycode}
 
 然后编写头文件代码：
@@ -3700,6 +3740,14 @@ void ota_task(void)
         ESP_LOGE(TAG, "Firmware upgrade failed");
     }
 }
+\end{mycode}
+
+在Windows中打开Anaconda PowerShell Prompt。
+
+然后在\textcolor{red}{二进制文件所在目录}执行以下命令：
+
+\begin{mycode}{启动服务器}
+python -m http.server 8070
 \end{mycode}
 
 \end{document}
