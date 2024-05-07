@@ -432,7 +432,13 @@ Linux内核中的模块可以提供函数或变量，用EXPORT\_SYMBOL宏导出�
         $ /etc/modules-load.d/<filename>.conf
     \end{mycode}
 
-    如果要在启动的时候加载一些模块，则只需创建文件/etc/modules-load.d/<filename>.conf，并添加应该加载的模块名称（每行一个）。<filename>应该是有意义的名称，人们通常使用模块：/etc/modules-load.d/modules.conf。当然也可以根据需要创建多个.conf文件。下面是一个/etc/modules-load.d/mymodules.conf文件中的内容：
+    如果要在启动的时候加载一些模块，则只需创建文件\Colorbox{lightgrey}{\lstinline{/etc/modules-load.d/<filename>.conf}}，并添加应该加载的模块名称（每行一个）。
+    
+    \Colorbox{lightgrey}{\lstinline{<filename>}}应该是有意义的名称，人们通常使用模块：\Colorbox{lightgrey}{\lstinline{/etc/modules-load.d/modules.conf}}。
+    
+    当然也可以根据需要创建多个\Colorbox{lightgrey}{\lstinline{.conf}}文件。
+    
+    下面是一个\Colorbox{lightgrey}{\lstinline{/etc/modules-load.d/mymodules.conf}}文件中的内容：
 
     \begin{mycode}{配置文件示例}
         #this line is a comment
@@ -464,9 +470,112 @@ Linux内核中的模块可以提供函数或变量，用EXPORT\_SYMBOL宏导出�
 
     \item 模块卸载
     
-    常用的模块卸载命令是rmmod，人们更喜欢用这个来卸载insmod命令加载的模块。使用该命令时，应该把要卸载的模块名作为参数向其传递。模块卸载是内核的一项功能，该功能的启用或禁用由CONFIG\_MODULE\_UNLOAD配置选项的值决定。没有这个选项，就不能卸载任何模块。以下设置将启用模块卸载功能：
-
+    常用的模块卸载命令是rmmod，人们更喜欢用这个来卸载insmod命令加载的模块。使用该命令时，应该把要卸载的模块名作为参数向其传递。
     
+    模块卸载是内核的一项功能，该功能的启用或禁用由CONFIG\_MODULE\_UNLOAD配置选项的值决定。没有这个选项，就不能卸载任何模块。以下设置将启用模块卸载功能：
+
+    \begin{mycode}{模块卸载配置}
+        CONFIG_MODULE_UNLOAD=y
+    \end{mycode}
+
+    在运行时，如果模块卸载会导致其他不良影响，则即使有人要求卸载，内核也将阻止这样做。这是因为内核通过引用计数记录模块的使用次数，这样它就知道模块是否在用。如果内核认为删除一个模块是不安全的，就不会删除它。然而，以下设置可以改变这种行为：
+
+    \begin{mycode}{强制卸载模块配置}
+        MODULE_FORCE_UNLOAD=y
+    \end{mycode}
+
+    上面的选项应该在内核配置中设置，以强制卸载模块：
+
+    \begin{mycode}{强制卸载模块}
+        rmmod -f mymodule
+    \end{mycode}
+
+    而另一个更高级的模块卸载命令是\Colorbox{lightgrey}{\lstinline{modeprobe -r}}，它会自动卸载未使用的相关依赖模块：
+
+    \begin{mycode}{自动卸载相关依赖}
+        modeprobe -r mymodule
+    \end{mycode}
+
+    这对于开发者来说是一个非常有用的选择。用下列命令可以检查模块是否已加载：
+
+    \begin{mycode}{列出模块}
+        lsmod
+    \end{mycode}
 \end{enumerate}
+
+\section{驱动程序框架}
+
+\begin{mycode}{helloworld.c}
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+
+static int __init helloworld_init(void) {
+    pr_info("Hello world!\n");
+    return 0;
+}
+
+static void __exit helloworld_exit(void) {
+    pr_info("End of the world\n");
+}
+
+module_init(helloworld_init);
+module_exit(helloworld_exit);
+MODULE_AUTHOR("Yuan Zuo <zuoyuantc@gmail.com>");
+MODULE_LICENSE("GPL");
+\end{mycode}
+
+\subsection{模块的入口点和出口点}
+
+内核驱动程序都有入口点和出口点：前者对应于模块加载时调用的函数（modprobe和insmod），后者是模块卸载时执行的函数（在执行rmmod或modprobe -r时）。
+
+main()函数是用C/C++编写的每个用户空间程序的入口点，当这个函数返回时，程序将退出。而对于内核模块，情况就不一样了：入口点可以随意命名，它也不像用户空间程序那样在main()返回时退出，其出点在另一个函数中定义。开发人员要做的就是通知内核把哪些函数作为入口点或出口点来执行。实际函数hellowolrd\_init和hellowolrd\_exit可以被命名成任何名字。实际上，唯一必须要做的是把它们作为参数提供给module\_init()和module\_exit()宏，将它们标识为相应的加载和删除函数。
+
+综上所述，module\_init()用于声明模块加载（使用insmod或modprobe）时应该调用的函数。初始化函数中要完成的操作是定义模块的行为。module\_exit()用于声明模块卸载（使用rmmod）时应该调用的函数。
+
+\begin{marker}
+在模块加载或卸载后，init函数或exit函数立即运行一次。
+\end{marker}
+
+\Colorbox{lightgrey}{\lstinline{__init和__exit属性}}
+
+\Colorbox{lightgrey}{\lstinline{__init}}和\Colorbox{lightgrey}{\lstinline{__exit}}实际上是在include/linux/init.h中定义的内核宏，如下所示：
+
+\begin{mycode}{宏定义}
+#define __init __section(.init.text)
+#define __exit __section(.exit.text)
+\end{mycode}
+
+\Colorbox{lightgrey}{\lstinline{__init}}关键字告诉链接器将该代码放在内核对象文件的专用部分。这部分事先为内核所知，它在模块加载和init函数执行后被释放。这仅适用于内置驱动程序，而不适用于可加载模块。内核在启动过程中第一次运行驱动程序的初始化函数。
+
+由于驱动程序不能卸载，因此在下次重启之前不会再调用其init函数，没有必要在init函数内记录引用次数。对于\Colorbox{lightgrey}{\lstinline{__exit}}关键字也是如此，在将模块静态编译到内核或未启用模块卸载功能时，其相应的代码会被忽略，因为在这两种情况下都不会调用exit函数。\Colorbox{lightgrey}{\lstinline{__exit}}对可加载模块没有影响。
+
+我们花一点时间进一步了解这些属性的工作方式，这涉及被称作可执行和可链接格式（ELF）的目标文件。ELF目标文件由不同的命名部分组成，其中一些部分是必需的，它们成为ELF标准的基础，但也可以根据自己的需要构建任一部分，并由特殊程序使用。内核就是这样做。执行\Colorbox{lightgrey}{\lstinline{objdump -h module.ko}}即可打印出指定内核模块module.ko的不同组成部分。
+
+打印内容只有少部分属于ELF标准。
+
+\begin{itemize}
+\item .text：包含程序代码，也称为代码。
+\item .data：包含初始化数据，也称为数据段。
+\item .rodata：用于只读数据。
+\item .comment：注释。
+\item 未初始化的数据段，也称为由符号开始的块（block started by symbol，bss）。
+\end{itemize}
+
+其他部分是根据内核的需要添加的。本章较重要的部分是.modeinfo和.init.text，前者存储有关模块的信息，后者存储以\_\_init宏为前缀的代码。
+
+链接器（Linux系统上的ld）是binutils的一部分，负责将符号（数据、代码等）放置到生成的二进制文件中的适当部分，以便在程序执行时可以被加载器处理。二进制文件中的这些部分可以自定义、更改它们的默认位置，甚至可以通过提供链接器脚本[称为链接器定义文件（LDF）或链接器定义脚本（LDS）]来添加其他部分。要实现这些操作只需通过编译器指令把符号的位置告知链接器即可，GNU C编译器为此提供了一些属性。Linux内核提供了一个自定义LDS文件，它位于arch/<arch>/kernel/vmlinux.lds.S中。对于要放置在内核LDS文件所映射的专用部分中的符号，使用\_\_init和\_\_exit进行标记。
+
+总之，\_\_init和\_\_exit是Linux指令（实际上是宏），它们使用C编译器属性指定符号的位置。这些指令指示编译器将以它们为前缀的代码分别放在.init.text和.exit.text部分，虽然内核可以访问不同的对象部分。
+
+\subsection{模块信息}
+
+即使不读代码，也应该能够收集到关于给定模块的一些信息（如作者、参数描述、许可）。内核模块使用其.modinfo部分来存储关于模块的信息，所有MODULE\_*宏都用参数传递的值更新这部分的内容。其中一些宏是MODULE\_DESCRIPTION()、MODULE\_AUTHOR()和MODULE\_LICENSE()。内核提供的在模块信息部分添加条目的真正底层宏是MODULE\_INFO(tag,info)，它添加的一般信息形式是tag=info。这意味着驱动程序作者可以自由添加其想要的任何形式信息，例如：
+
+\begin{mycode}{作者信息}
+MODULE_INFO(my_field_name, "What eeasy value");
+\end{mycode}
+
+在给定模块上执行\Colorbox{lightgrey}{\lstinline{objdump -d -j .modinfo}}命令可以转储内核模块.modeinfo部分的内容，如图2-3所示。
 
 \end{document}

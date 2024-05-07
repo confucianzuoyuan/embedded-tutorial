@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024/Arch Linux) (preloaded format=xelatex 2024.4.26)  7 MAY 2024 11:13
+This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024/Arch Linux) (preloaded format=xelatex 2024.4.26)  7 MAY 2024 14:43
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -2026,27 +2026,41 @@ Overfull \hbox (9.96014pt too wide) in paragraph at lines 406--407
  (./ldd.listing)
 \openout11 = `ldd.listing'.
 
- (./ldd.listing)
-Overfull \hbox (26.40262pt too wide) in paragraph at lines 435--436
-\T1/TeXGyreTermesX(0)/m/it/10 load.d/modules.conf\TU/FandolSong-Regular(0)/m/n/10 。|  当 然 也 可 以 根 据 需 要 创 建 多 个\T1/TeXGyreTermesX(0)/m/it/10 .conf \TU/FandolSong-Regular(0)/m/n/10 文 件。|  下 面 是 一 个\T1/TeXGyreTermesX(0)/m/it/10 /etc/modules-load.d/mymodules.conf
- []
-
-[8]
+ (./ldd.listing) [8]
 \openout11 = `ldd.listing'.
 
  (./ldd.listing)
-Overfull \hbox (21.79996pt too wide) in paragraph at lines 445--446
+Overfull \hbox (21.79996pt too wide) in paragraph at lines 451--452
 \TU/FandolSong-Regular(0)/m/n/10 该 驱 动 程 序。| \T1/TeXGyreTermesX(0)/m/it/10 dep-mod \TU/FandolSong-Regular(0)/m/n/10 还 处 理 模 块 文 件 以 提 取 和 收 集 该 信 息，|  并 在\T1/TeXGyreTermesX(0)/m/it/10 /lib/modules/<kernel_release>/modules.alias
  []
 
 \openout11 = `ldd.listing'.
 
 (./ldd.listing)
-Overfull \hbox (68.55774pt too wide) in paragraph at lines 467--468
-\TU/FandolSong-Regular(0)/m/n/10 要 卸 载 的 模 块 名 作 为 参 数 向 其 传 递。|  模 块 卸 载 是 内 核 的 一 项 功 能，|  该 功 能 的 启 用 或 禁 用 由 \T1/TeXGyreTermesX(0)/m/it/10 CON-FIG_MODULE_UNLOAD
- []
+\openout11 = `ldd.listing'.
 
-[9] (./ldd.aux)
+ (./ldd.listing) [9]
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing)
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing)
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing)
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing)
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing) [10]
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing) [11]
+\openout11 = `ldd.listing'.
+
+ (./ldd.listing) [12] [13] (./ldd.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2022/08/05>
@@ -2056,18 +2070,18 @@ L3 programming layer <2022/08/05>
 LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 
 Package rerunfilecheck Info: File `ldd.out' has not changed.
-(rerunfilecheck)             Checksum: 69A4E8AEFDDF70468A3EE30E4E689EA1;1770.
+(rerunfilecheck)             Checksum: 84C3570A1F36A4866894CA75DCE2D02A;2195.
 Package logreq Info: Writing requests to 'ldd.run.xml'.
 \openout1 = `ldd.run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 60356 strings out of 474773
- 1329771 string characters out of 5763519
- 2404596 words of memory out of 5000000
- 81541 multiletter control sequences out of 15000+600000
+ 60535 strings out of 474773
+ 1332127 string characters out of 5763519
+ 2419053 words of memory out of 5000000
+ 81704 multiletter control sequences out of 15000+600000
  580666 words of font info for 125 fonts, out of 8000000 for 9000
  1348 hyphenation exceptions out of 8191
  103i,12n,136p,1594b,2276s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on ldd.pdf (11 pages).
+Output written on ldd.pdf (15 pages).
