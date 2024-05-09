@@ -578,4 +578,23 @@ MODULE_INFO(my_field_name, "What eeasy value");
 
 在给定模块上执行\Colorbox{lightgrey}{\lstinline{objdump -d -j .modinfo}}命令可以转储内核模块.modeinfo部分的内容，如图2-3所示。
 
+\chapter{设备树的概念}
+
+设备树（DT，Derive Tree）是易于阅读的硬件描述文件，它采用JSON式的格式化风格，在这种简单的树形结构中，设备表示为带有属性的节点。属性可以是空（只有键，用来描述布尔值），也可以是键值对，其中的值可以包含任意的字节流。本章简单地介绍DT，每个内核子系统或框架都有自己的DT绑定。讲解有关话题时将包括具体的绑定。DT源于OF，这是计算机公司公认的标准，其主要目的是定义计算机固件系统的接口。
+
+本章涉及以下主题。
+
+\begin{itemize}
+\item 命名约定，以及别名和标签。
+\item 描述数据类型及其API。
+\item 管理寻址方案和访问设备资源。
+\item 实现OF匹配风格，提供应用程序的相关数据。
+\end{itemize}
+
+\section{设备树机制}
+
+将选项\Colorbox{lightgrey}{\lstinline{CONFIG_OF}}设置为Y即可在内核中启用DT。要在驱动程序中调用DT API，必须添加以下头文件：
+
+
+
 \end{document}
