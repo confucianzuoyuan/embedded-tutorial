@@ -14,3 +14,5 @@
 \contentsline {section}{\numberline {2.2}驱动程序框架}{11}{section.2.2}%
 \contentsline {subsection}{\numberline {2.2.1}模块的入口点和出口点}{11}{subsection.2.2.1}%
 \contentsline {subsection}{\numberline {2.2.2}模块信息}{12}{subsection.2.2.2}%
+\contentsline {chapter}{\numberline {第三章}设备树的概念}{14}{chapter.3}%
+\contentsline {section}{\numberline {3.1}设备树机制}{14}{section.3.1}%

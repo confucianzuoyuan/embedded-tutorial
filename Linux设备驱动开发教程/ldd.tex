@@ -578,6 +578,12 @@ MODULE_INFO(my_field_name, "What eeasy value");
 
 在给定模块上执行\Colorbox{lightgrey}{\lstinline{objdump -d -j .modinfo}}命令可以转储内核模块.modeinfo部分的内容，如图2-3所示。
 
+\chapter{内核工具和辅助函数}
+
+\chapter{字符设备驱动程序}
+
+\chapter{平台设备驱动程序}
+
 \chapter{设备树的概念}
 
 设备树（DT，Derive Tree）是易于阅读的硬件描述文件，它采用JSON式的格式化风格，在这种简单的树形结构中，设备表示为带有属性的节点。属性可以是空（只有键，用来描述布尔值），也可以是键值对，其中的值可以包含任意的字节流。本章简单地介绍DT，每个内核子系统或框架都有自己的DT绑定。讲解有关话题时将包括具体的绑定。DT源于OF，这是计算机公司公认的标准，其主要目的是定义计算机固件系统的接口。
@@ -594,6 +600,38 @@ MODULE_INFO(my_field_name, "What eeasy value");
 \section{设备树机制}
 
 将选项\Colorbox{lightgrey}{\lstinline{CONFIG_OF}}设置为Y即可在内核中启用DT。要在驱动程序中调用DT API，必须添加以下头文件：
+
+\chapter{$I^2C$客户端驱动程序}
+
+\chapter{SPI设备驱动程序}
+
+\chapter{Regmap API——寄存器映射抽象}
+
+\chapter{IIO框架}
+
+\chapter{内核内存管理}
+
+\chapter{DMA——直接内存访问}
+
+\chapter{Linux设备模型}
+
+\chapter{引脚控制和GPIO子系统}
+
+\chapter{GPIO控制器驱动程序——gpio\_chip}
+
+\chapter{高级IRQ管理}
+
+\chapter{输入设备驱动程序}
+
+\chapter{RTC驱动程序}
+
+\chapter{PWM驱动程序}
+
+\chapter{调节器框架}
+
+\chapter{帧缓冲驱动程序}
+
+\chapter{网络接口卡驱动程序}
 
 
 
