@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024/Arch Linux) (preloaded format=xelatex 2024.4.26)  9 MAY 2024 17:43
+This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024/Arch Linux) (preloaded format=xelatex 2024.4.26)  9 MAY 2024 17:52
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -1928,15 +1928,15 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 
 
 
-] (./ldd.toc)
+] (./ldd.toc [1
+
+
+
+])
 \tf@toc=\write10
 \openout10 = `ldd.toc'.
 
- [1
-
-
-
-]
+ [2]
 Chapter 1.
 \g__tcobox_out_iow=\write11
 \openout11 = `ldd.listing'.
@@ -2064,6 +2064,94 @@ Overfull \hbox (21.79996pt too wide) in paragraph at lines 451--452
 Chapter 3.
 [14
 
+]
+Chapter 4.
+[15
+
+]
+Chapter 5.
+[16
+
+]
+Chapter 6.
+[17
+
+]
+Chapter 7.
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 604.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `superscript' on input line 604.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 604.
+
+[18
+
+]
+Chapter 8.
+[19
+
+]
+Chapter 9.
+[20
+
+]
+Chapter 10.
+[21
+
+]
+Chapter 11.
+[22
+
+]
+Chapter 12.
+[23
+
+]
+Chapter 13.
+[24
+
+]
+Chapter 14.
+[25
+
+]
+Chapter 15.
+[26
+
+]
+Chapter 16.
+[27
+
+]
+Chapter 17.
+[28
+
+]
+Chapter 18.
+[29
+
+]
+Chapter 19.
+[30
+
+]
+Chapter 20.
+[31
+
+]
+Chapter 21.
+[32
+
+]
+Chapter 22.
+[33
+
 ] (./ldd.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
@@ -2074,18 +2162,18 @@ L3 programming layer <2022/08/05>
 LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 
 Package rerunfilecheck Info: File `ldd.out' has not changed.
-(rerunfilecheck)             Checksum: DBC45758A216DEDD3FDA5533D29BCDCB;2435.
+(rerunfilecheck)             Checksum: 0A46E67AECC4F49719FC9B74F83C8202;5256.
 Package logreq Info: Writing requests to 'ldd.run.xml'.
 \openout1 = `ldd.run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 60544 strings out of 474773
- 1332212 string characters out of 5763519
- 2419327 words of memory out of 5000000
- 81713 multiletter control sequences out of 15000+600000
- 580666 words of font info for 125 fonts, out of 8000000 for 9000
+ 60628 strings out of 474773
+ 1336051 string characters out of 5763519
+ 2422529 words of memory out of 5000000
+ 81796 multiletter control sequences out of 15000+600000
+ 595388 words of font info for 164 fonts, out of 8000000 for 9000
  1348 hyphenation exceptions out of 8191
  103i,12n,136p,1594b,2276s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on ldd.pdf (16 pages).
+Output written on ldd.pdf (36 pages).
