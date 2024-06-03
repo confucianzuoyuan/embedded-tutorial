@@ -93,135 +93,93 @@ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
 我们需要修改```sh arch/arm/boot/dts/sun8i-v3s-licheepi-zero.dts```以启用以太网和USB支持。
 
 ```
-/*
- * Copyright (C) 2016 Icenowy Zheng <icenowy@aosc.xyz>
- *
- * This file is dual-licensed: you can use it either under the terms
- * of the GPL or the X11 license, at your option. Note that this dual
- * licensing only applies to this file, and not this project as a
- * whole.
- *
- *  a) This file is free software; you can redistribute it and/or
- *     modify it under the terms of the GNU General Public License as
- *     published by the Free Software Foundation; either version 2 of the
- *     License, or (at your option) any later version.
- *
- *     This file is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- * Or, alternatively,
- *
- *  b) Permission is hereby granted, free of charge, to any person
- *     obtaining a copy of this software and associated documentation
- *     files (the "Software"), to deal in the Software without
- *     restriction, including without limitation the rights to use,
- *     copy, modify, merge, publish, distribute, sublicense, and/or
- *     sell copies of the Software, and to permit persons to whom the
- *     Software is furnished to do so, subject to the following
- *     conditions:
- *
- *     The above copyright notice and this permission notice shall be
- *     included in all copies or substantial portions of the Software.
- *
- *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- *     OTHER DEALINGS IN THE SOFTWARE.
- */
-
 /dts-v1/;
 #include "sun8i-v3s.dtsi"
 #include "sunxi-common-regulators.dtsi"
 
 / {
-	model = "Lichee Pi Zero";
-	compatible = "licheepi,licheepi-zero", "allwinner,sun8i-v3s";
+    model = "Lichee Pi Zero";
+    compatible = "licheepi,licheepi-zero", "allwinner,sun8i-v3s";
 
-	aliases {
-		serial0 = &uart0;
-		ethernet0 = &emac; /* 添加这一行 */
-	};
+    aliases {
+        serial0 = &uart0;
+        ethernet0 = &emac; /* 添加这一行 */
+    };
 
-	chosen {
-		stdout-path = "serial0:115200n8";
-	};
+    chosen {
+        stdout-path = "serial0:115200n8";
+    };
 
-	leds {
-		compatible = "gpio-leds";
+    leds {
+        compatible = "gpio-leds";
 
-		blue_led {
-			label = "licheepi:blue:usr";
-			gpios = <&pio 6 1 GPIO_ACTIVE_LOW>; /* PG1 */
-		};
+        blue_led {
+            label = "licheepi:blue:usr";
+            gpios = <&pio 6 1 GPIO_ACTIVE_LOW>; /* PG1 */
+        };
 
-		green_led {
-			label = "licheepi:green:usr";
-			gpios = <&pio 6 0 GPIO_ACTIVE_LOW>; /* PG0 */
-			default-state = "on";
-		};
+        green_led {
+            label = "licheepi:green:usr";
+            gpios = <&pio 6 0 GPIO_ACTIVE_LOW>; /* PG0 */
+            default-state = "on";
+        };
 
-		red_led {
-			label = "licheepi:red:usr";
-			gpios = <&pio 6 2 GPIO_ACTIVE_LOW>; /* PG2 */
-		};
-	};
+        red_led {
+            label = "licheepi:red:usr";
+            gpios = <&pio 6 2 GPIO_ACTIVE_LOW>; /* PG2 */
+        };
+    };
 
   /* 添加以下soc部分 */
-	soc {
-		ehci0: usb@01c1a000 {
-			compatible = "allwinner,sun8i-v3s-ehci", "generic-ehci";
-			reg = <0x01c1a000 0x100>;
-			interrupts = <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>;
-			resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
-			status = "okay";
-		};
+    soc {
+        ehci0: usb@01c1a000 {
+            compatible = "allwinner,sun8i-v3s-ehci", "generic-ehci";
+            reg = <0x01c1a000 0x100>;
+            interrupts = <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>;
+            clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>;
+            resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
+            status = "okay";
+        };
 
-		ohci0: usb@01c1a400 {
-			compatible = "allwinner,sun8i-v3s-ohci", "generic-ohci";
-			reg = <0x01c1a400 0x100>;
-			interrupts = <GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>,
-			<&ccu CLK_USB_OHCI0>;
-			resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
-			status = "okay";
-		};
-	};
+        ohci0: usb@01c1a400 {
+            compatible = "allwinner,sun8i-v3s-ohci", "generic-ohci";
+            reg = <0x01c1a400 0x100>;
+            interrupts = <GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
+            clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>,
+            <&ccu CLK_USB_OHCI0>;
+            resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
+            status = "okay";
+        };
+    };
 };
 
 &mmc0 {
-	broken-cd;
-	bus-width = <4>;
-	vmmc-supply = <&reg_vcc3v3>;
-	status = "okay";
+    broken-cd;
+    bus-width = <4>;
+    vmmc-supply = <&reg_vcc3v3>;
+    status = "okay";
 };
 
 &uart0 {
-	pinctrl-0 = <&uart0_pb_pins>;
-	pinctrl-names = "default";
-	status = "okay";
+    pinctrl-0 = <&uart0_pb_pins>;
+    pinctrl-names = "default";
+    status = "okay";
 };
 
 &usb_otg {
-	dr_mode = "host";
-	status = "okay";
+    dr_mode = "host";
+    status = "okay";
 };
 
 &usbphy {
-	usb0_id_det-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
-	status = "okay";
+    usb0_id_det-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
+    status = "okay";
 };
 
 /* 添加emac部分 */
 &emac {
-	allwinner,leds-active-low;
-	status = "okay";
+    allwinner,leds-active-low;
+    status = "okay";
 };
 ```
 
